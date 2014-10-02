@@ -1,8 +1,9 @@
 import numpy as np
 
+import linreg
+import asdard
 from resp import Resp
 from stim import Stim
-import linreg
 from plot import plot, plotT
 
 rmse = lambda x, y: np.sqrt(np.mean((y-x)**2))
@@ -10,28 +11,38 @@ def main():
     n, ns, nt = 1000, 19, 7
     S = Stim(n, nt, ns)
     R = Resp(S)
-    plot(S, R)
+    # plot(S, R)
     
     rs = []
     ss = []
     ts = []
-    pcts = np.linspace(1, 100, 25)
+    pcts = np.linspace(1, 100, 10)
     ns = np.round((n*pcts)/100.)
     ws = R.ws
-    for ni in ns:
+    for i, ni in enumerate(ns):
+        print '{0} of {1}'.format(i+1, len(ns))
 
         X = S.Xs[1:ni, :]
         Y = R.Y[1:ni]
         D = S.D
 
-        whs = linreg.solve(X, Y)
-        # Rhr, whr = ridge(X, Y)
-        # RhASD, whASD, theta = ASD(X, Y, D)
+        whs1 = linreg.solve(X, Y)
+        whs2, _, _ = asdard.ARD(X, Y)
+        whs3, _, _ = asdard.ASD_FP(X, Y, D)
 
-        rs.append(rmse(whs, ws))
-        # ss.append(rmse(whr, ws))
-        # ts.append(rmse(whASD, ws))
-    plotT(pcts, rs)
+        # rs.append(rmse(whs1, ws))
+        # ss.append(rmse(whs2, ws))
+        # ts.append(rmse(whs3, ws))
+
+        X2 = S.Xs[ni+1:, :]
+        Y2 = R.Y[ni+1:]
+
+        rs.append(rmse(X2.dot(whs1), Y2))
+        ss.append(rmse(X2.dot(whs2), Y2))
+        ts.append(rmse(X2.dot(whs3), Y2))
+
+    plotT(pcts, [rs, ss, ts])
+    1/0
 
 if __name__ == '__main__':
     main()

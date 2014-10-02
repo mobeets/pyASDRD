@@ -8,8 +8,8 @@ def PostCov(RegInv, XX, sigma_sq):
 def PostMean(sigma, XY, sigma_sq):
     return sigma.dot(XY)/sigma_sq
 
-def ASDReg(ro, D, delta_sq):
-    return np.exp(-ro-0.5*D/(delta_sq**2))
+def ASDReg(ro, D, delta_s):
+    return np.exp(-ro-0.5*D/(delta_s**2))
 
 def ASDEviGradient((ro, delta_s, sigma_sq), X, Y, XX, XY, p, q, D):
     """
@@ -26,11 +26,13 @@ def ASDEviGradient((ro, delta_s, sigma_sq), X, Y, XX, XY, p, q, D):
     sse = err.dot(err.T)
     
     # hyperparameter derivatives
-    Z = (Reg - sigma - mu.dot(mu.T)) * RegInv
-    v = -p + np.trace(np.eye(q) - sigma*RegInv)
+    Z = (Reg - sigma - np.outer(mu, mu)).dot(RegInv)
+    v = -p + np.trace(np.eye(q) - sigma.dot(RegInv))
     # Z is too big after first iteration because mu.dot(mu.T) overpowers...
     der_ro = 0.5*np.trace(Z)
-    der_delta_s = -0.5*np.trace(Z * np.multiply(Reg, D/(delta_s**3)) * RegInv)
+    # print Reg.shape, D.shape
+    # print np.trace(Z), np.diag(Reg * D/(delta_s**3)), np.diag(D/(delta_s**3)), np.diag(Reg)
+    der_delta_s = -0.5*np.trace(Z.dot(Reg * D/(delta_s**3)).dot(RegInv))
     der_sigma_sq = sse/(sigma_sq**2) + v/sigma_sq
 
     return (der_ro, der_delta_s, der_sigma_sq), (mu, sigma, Reg, RegInv, sse)
@@ -47,7 +49,7 @@ def ASDEvi(X, Y, Reg, sigma, sigma_sq, p, q):
     B = (np.eye(p)/sigma_sq) - (X.dot(sigma).dot(X.T))/(sigma_sq**2)
     return 0.5*(logZ - Y.T.dot(B).dot(Y))
 
-def ASD(X, Y, D):
+def ASD(X, Y, D, theta0=(8.0, 2.0, 0.1), method='SLSQP'):
     """
     X - (p x q) matrix with inputs in rows
     Y - (p, 1) matrix with measurements
@@ -68,27 +70,25 @@ def ASD(X, Y, D):
             hyper = (ro, delta_s, sigma_sq)
             der_hyper, (mu, sigma, Reg, RegInv, sse) = ASDEviGradient(hyper, X, Y, XX, XY, p, q, D)
             evi = ASDEvi(X, Y, Reg, sigma, sigma_sq, p, q)
-            return evi, -np.array(der_hyper)
+            # print -evi, hyper, der_hyper
+            return -evi, -np.array(der_hyper)
         return objfcn
 
     p, q = np.shape(X)
     XY = X.T.dot(Y)
     XX = X.T.dot(X)
-    
-    #initialize parameters
-    ro = 8.0
-    delta_s = 2.0
-    sigma_sq = 0.1 # np.sum(np.power(Y - X*(np.linalg.qr(X)[1]*Y),2)) / p    
-    theta0 = (ro, delta_s, sigma_sq)
 
     objfcn = objfun_maker(X, Y, XX, XY, p, q, D)
-    theta = scipy.optimize.minimize(objfcn, theta0, method='TNC', jac=True)
-    print theta
-    der_hyper, (mu, sigma, Reg, RegInv, sse) = ASDEviGradient(theta['x'], X, Y, XX, XY, p, q, D)
+    # bounds = [(-20.0, 20.0), (10e-6, 10e6), (10e-6, 10e6)]
+    bounds = [(-20.0, 20.0), (0.5, None), (1e-5, None)]
+    theta = scipy.optimize.minimize(objfcn, theta0, bounds=bounds, method=method, jac=True)
+    if not theta['success']:
+        print theta
+    hyper = theta['x']
+    der_hyper, (mu, sigma, Reg, RegInv, sse) = ASDEviGradient(hyper, X, Y, XX, XY, p, q, D)
+    return mu, Reg, hyper
 
-    return mu, Reg
-
-def ASD_FP(X, Y, D, niters=100):
+def ASD_FP(X, Y, D, theta0=(8.0, 2.0, 0.1), maxiters=10000, step=0.01, tol=1e-6,):
     """
     X - (p x q) matrix with inputs in rows
     Y - (p, 1) matrix with measurements
@@ -103,25 +103,19 @@ def ASD_FP(X, Y, D, niters=100):
         Evidence optimization techniques for estimating stimulus-response functions.
         In S. Becker, S. Thrun, and K. Obermayer, eds., Advances in Neural Information Processing Systems, vol. 15, pp. 301-308, Cambridge, MA, 2003. 
     """
+    memstep = lambda base, prev: ((prev*base) > 0) * prev * 0.99
+
     p, q = np.shape(X)
     XY = X.T.dot(Y)
     XX = X.T.dot(X)
     
-    #initialize parameters
-    ro = 8
-    delta_s = 2.0
-    sigma_sq = 0.1 # np.sum(np.power(Y - X*(np.linalg.qr(X)[1]*Y),2)) / p   
+    hyper = theta0
     der_ro = 0
     der_ro_m = 0
     der_delta_s_m = 0
     der_sigma_sq_m = 0
-    
-    step = 0.01
-    print 'i, ro, delta_s, sigma_sq, der_ro_m, der_delta_s_m, step'
-    for i in xrange(niters):
-        print i, ro, delta_s, sigma_sq, der_ro_m, der_delta_s_m, step, der_ro
-        
-        hyper = (ro, delta_s, sigma_sq)
+    for i in xrange(maxiters):
+        (ro, delta_s, sigma_sq) = hyper
         der_hyper, (mu, sigma, Reg, RegInv, sse) = ASDEviGradient(hyper, X, Y, XX, XY, p, q, D)
         (der_ro, der_delta_s, der_sigma_sq) = der_hyper
         
@@ -130,7 +124,6 @@ def ASD_FP(X, Y, D, niters=100):
             der_ro_m = der_ro
             der_delta_s_m = der_delta_s
         else:
-            memstep = lambda base, prev: ((prev*base) > 0) * prev * 0.99
             der_ro_m = der_ro + memstep(der_ro, der_ro_m)
             der_delta_s_m = der_delta_s + memstep(der_delta_s, der_delta_s_m)
 
@@ -140,11 +133,16 @@ def ASD_FP(X, Y, D, niters=100):
         v = -p + np.trace(np.eye(q) - sigma*RegInv)
         sigma_sq = -sse/v
 
-    hyper = (ro, delta_s, sigma_sq)
-    der_hyper, (mu, sigma, Reg, RegInv, sse) = ASDHyperGradient(hyper, X, Y, XX, XY, p, q, D)
-    return mu, Reg
+        hyper_prev = hyper
+        hyper = (ro, delta_s, sigma_sq)
+        if (np.abs(np.array(hyper_prev) - np.array(hyper)) < tol).all():
+            break
+        # print hyper, der_hyper
 
-def ARD(X, Y, niters=100):
+    der_hyper, (mu, sigma, Reg, RegInv, sse) = ASDEviGradient(hyper, X, Y, XX, XY, p, q, D)
+    return mu, Reg, hyper
+
+def ARD(X, Y, niters=10000):
     """
     X - (p x q) matrix with inputs in rows
     Y - (p, 1) matrix with measurements
@@ -176,7 +174,7 @@ def ARD(X, Y, niters=100):
     RegInv = np.diagflat(alpha)
     sigma = PostCov(RegInv, XX, sigma_sq)
     mu = PostMean(sigma, XY, sigma_sq)
-    return mu, RegInv
+    return mu, RegInv, (alpha, sigma_sq)
     
 def ASDRD(X, Y, S):
     """
@@ -188,10 +186,10 @@ def ASDRD(X, Y, S):
         Evidence optimization techniques for estimating stimulus-response functions.
         In S. Becker, S. Thrun, and K. Obermayer, eds., Advances in Neural Information Processing Systems, vol. 15, pp. 301-308, Cambridge, MA, 2003. 
     """
-    D,V = np.linalg.eigh(S)
-    V = np.mat(V)
+    D, V = np.linalg.eigh(S)
+    # V = np.mat(V)
     D = np.diag(np.sqrt(D))
     R = V.dot(D).dot(V.T)
     w = ARD(X.dot(R),Y)
-    w = R * w
+    w = R.dot(w)
     return w

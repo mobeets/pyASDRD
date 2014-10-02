@@ -19,8 +19,10 @@ def plot(S, R, i=0):
         plt.colorbar()
         plt.show()
 
-def plotT(pcts, res):
-    plt.plot(pcts, res, 'o')
+def plotT(pcts, rs):
+    cs = ['b', 'g', 'r', 'k', 'c']
+    for i, r in enumerate(rs):
+        plt.plot(pcts, r, '-' + cs[i])
     plt.xlabel('%')
     plt.ylabel('rmse')
     # plt.xscale('log')
