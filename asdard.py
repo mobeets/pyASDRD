@@ -26,10 +26,13 @@ def ASDEviGradient(hyper, X, Y, XX, XY, p, q, Ds):
     """
     gradient of log evidence w.r.t. hyperparameters
     """
-    (ro, sigma_sq, delta_s) = hyper
-    D = Ds[0]
+    ro, sigma_sq = hyper[:2]
+    deltas = hyper[2:]
+    assert len(Ds) == len(deltas)
+    ds = zip(Ds, deltas)
+
     # update regularizer
-    Reg = ASDReg(ro, [(D, delta_s)])
+    Reg = ASDReg(ro, ds)
     RegInv = np.linalg.inv(Reg)
 
     # posterior cov and mean
@@ -41,14 +44,14 @@ def ASDEviGradient(hyper, X, Y, XX, XY, p, q, Ds):
     # hyperparameter derivatives
     Z = (Reg - sigma - np.outer(mu, mu)).dot(RegInv)
     v = -p + np.trace(np.eye(q) - sigma.dot(RegInv))
-    # Z is too big after first iteration because mu.dot(mu.T) overpowers...
     der_ro = 0.5*np.trace(Z)
-    # print Reg.shape, D.shape
-    # print np.trace(Z), np.diag(Reg * D/(delta_s**3)), np.diag(D/(delta_s**3)), np.diag(Reg)
-    der_delta_s = -0.5*np.trace(Z.dot(Reg * D/(delta_s**3)).dot(RegInv))
     der_sigma_sq = sse/(sigma_sq**2) + v/sigma_sq
+    der_deltas = []
+    for (D, d) in ds:
+        der_deltas.append(-0.5*np.trace(Z.dot(Reg * D/(d**3)).dot(RegInv)))
+    der_hyper = (der_ro, der_sigma_sq) + tuple(der_deltas)
 
-    return (der_ro, der_sigma_sq, der_delta_s), (mu, sigma, Reg, RegInv, sse)
+    return der_hyper, (mu, sigma, Reg, RegInv, sse)
 
 logDet = lambda x: np.linalg.slogdet(x)[1]
 def ASDEvi(X, Y, Reg, sigma, sigma_sq, p, q):
@@ -62,11 +65,11 @@ def ASDEvi(X, Y, Reg, sigma, sigma_sq, p, q):
     B = (np.eye(p)/sigma_sq) - (X.dot(sigma).dot(X.T))/(sigma_sq**2)
     return 0.5*(logZ - Y.T.dot(B).dot(Y))
 
-def ASD(X, Y, D, theta0=(8.0, 0.1, 2.0), method='SLSQP'):
+def ASD(X, Y, Ds, theta0=None, method='SLSQP'):
     """
     X - (p x q) matrix with inputs in rows
     Y - (p, 1) matrix with measurements
-    D - (q, q) matrix containing squared distances between input points
+    Ds - [(q, q), ...] matrices containing squared distances between input points
 
     Returns:
         w - (q x 1) the regularized solution
@@ -77,11 +80,13 @@ def ASD(X, Y, D, theta0=(8.0, 0.1, 2.0), method='SLSQP'):
         Evidence optimization techniques for estimating stimulus-response functions.
         In S. Becker, S. Thrun, and K. Obermayer, eds., Advances in Neural Information Processing Systems, vol. 15, pp. 301-308, Cambridge, MA, 2003. 
     """
+    if theta0 is None:
+        theta0 = (8.0, 0.1) + (2.0,)*len(Ds)
 
-    def objfun_maker(X, Y, XX, XY, p, q, D):
-        def objfcn((ro, sigma_sq, delta_s)):
-            hyper = (ro, sigma_sq, delta_s)
-            der_hyper, (mu, sigma, Reg, RegInv, sse) = ASDEviGradient(hyper, X, Y, XX, XY, p, q, [D])
+    def objfun_maker(X, Y, XX, XY, p, q, Ds):
+        def objfcn(hyper):
+            der_hyper, (mu, sigma, Reg, RegInv, sse) = ASDEviGradient(hyper, X, Y, XX, XY, p, q, Ds)
+            sigma_sq = hyper[1]
             evi = ASDEvi(X, Y, Reg, sigma, sigma_sq, p, q)
             # print -evi, hyper, der_hyper
             return -evi, -np.array(der_hyper)
@@ -91,21 +96,21 @@ def ASD(X, Y, D, theta0=(8.0, 0.1, 2.0), method='SLSQP'):
     XY = X.T.dot(Y)
     XX = X.T.dot(X)
 
-    objfcn = objfun_maker(X, Y, XX, XY, p, q, D)
-    # bounds = [(-20.0, 20.0), (10e-6, 10e6), (10e-6, 10e6)]
-    bounds = [(-20.0, 20.0), (1e-5, None), (0.5, None)]
+    objfcn = objfun_maker(X, Y, XX, XY, p, q, Ds)
+    # bounds = [(-20.0, 20.0), (10e-6, 10e6)] + [(10e-6, 10e6)]*len(Ds)
+    bounds = [(-20.0, 20.0), (1e-5, None)] + [(0.5, None)]*len(Ds)
     theta = scipy.optimize.minimize(objfcn, theta0, bounds=bounds, method=method, jac=True)
     if not theta['success']:
         print theta
     hyper = theta['x']
-    der_hyper, (mu, sigma, Reg, RegInv, sse) = ASDEviGradient(hyper, X, Y, XX, XY, p, q, [D])
+    der_hyper, (mu, sigma, Reg, RegInv, sse) = ASDEviGradient(hyper, X, Y, XX, XY, p, q, Ds)
     return mu, Reg, hyper
 
-def ASD_FP(X, Y, D, theta0=(8.0, 0.1, 2.0), maxiters=10000, step=0.01, tol=1e-6,):
+def ASD_FP(X, Y, Ds, theta0=None, maxiters=10000, step=0.01, tol=1e-6,):
     """
     X - (p x q) matrix with inputs in rows
     Y - (p, 1) matrix with measurements
-    D - (q, q) matrix containing squared distances between input points
+    Ds - [(q, q), ...] matrices containing squared distances between input points
 
     Returns:
         w - (q x 1) the regularized solution
@@ -116,7 +121,8 @@ def ASD_FP(X, Y, D, theta0=(8.0, 0.1, 2.0), maxiters=10000, step=0.01, tol=1e-6,
         Evidence optimization techniques for estimating stimulus-response functions.
         In S. Becker, S. Thrun, and K. Obermayer, eds., Advances in Neural Information Processing Systems, vol. 15, pp. 301-308, Cambridge, MA, 2003. 
     """
-    memstep = lambda base, prev: ((prev*base) > 0) * prev * 0.99
+    if theta0 is None:
+        theta0 = (8.0, 0.1) + (2.0,)*len(Ds)
 
     p, q = np.shape(X)
     XY = X.T.dot(Y)
@@ -125,34 +131,43 @@ def ASD_FP(X, Y, D, theta0=(8.0, 0.1, 2.0), maxiters=10000, step=0.01, tol=1e-6,
     hyper = theta0
     der_ro = 0
     der_ro_m = 0
+    der_deltas_m = np.zeros(len(Ds))
     der_delta_s_m = 0
     der_sigma_sq_m = 0
+
+    memstep = lambda base, prev: ((prev*base) > 0) * prev * 0.99
     for i in xrange(maxiters):
-        (ro, sigma_sq, delta_s) = hyper
-        der_hyper, (mu, sigma, Reg, RegInv, sse) = ASDEviGradient(hyper, X, Y, XX, XY, p, q, [D])
-        (der_ro, der_sigma_sq, der_delta_s) = der_hyper
+        ro, sigma_sq = hyper[:2]
+        deltas = np.array(hyper[2:])
+
+        der_hyper, (mu, sigma, Reg, RegInv, sse) = ASDEviGradient(hyper, X, Y, XX, XY, p, q, Ds)
+        der_ro, der_sigma_sq = der_hyper[:2]
+        der_deltas = np.array(der_hyper[2:])
         
-        if der_ro_m*der_ro + der_delta_s_m*der_delta_s < 0:
+        if der_ro_m*der_ro + (der_deltas_m*der_deltas).sum() < 0:
             step *= 0.8
             der_ro_m = der_ro
-            der_delta_s_m = der_delta_s
+            der_deltas_m = der_deltas
         else:
             der_ro_m = der_ro + memstep(der_ro, der_ro_m)
-            der_delta_s_m = der_delta_s + memstep(der_delta_s, der_delta_s_m)
+            ddm2s = []
+            for der_delta, der_delta_m in zip(der_deltas, der_deltas_m):
+                ddm2s.append(der_delta + memstep(der_delta, der_delta_m))
+            der_deltas_m = np.array(ddm2s)
 
         ro += step * der_ro_m
-        delta_s += step * der_delta_s_m
-        delta_s = np.max([0.5, np.abs(delta_s)])
+        deltas += step * der_deltas_m
+        deltas = np.abs(deltas)
+        deltas[deltas < 0.5] = 0.5
         v = -p + np.trace(np.eye(q) - sigma*RegInv)
         sigma_sq = -sse/v
 
         hyper_prev = hyper
-        hyper = (ro, sigma_sq, delta_s)
+        hyper = (ro, sigma_sq) + tuple(deltas)
         if (np.abs(np.array(hyper_prev) - np.array(hyper)) < tol).all():
             break
-        # print hyper, der_hyper
 
-    der_hyper, (mu, sigma, Reg, RegInv, sse) = ASDEviGradient(hyper, X, Y, XX, XY, p, q, [D])
+    der_hyper, (mu, sigma, Reg, RegInv, sse) = ASDEviGradient(hyper, X, Y, XX, XY, p, q, Ds)
     return mu, Reg, hyper
 
 def ARD(X, Y, niters=10000, tol=1e-6):
