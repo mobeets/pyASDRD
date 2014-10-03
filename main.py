@@ -18,7 +18,7 @@ def main():
     rows = []
     pcts = np.linspace(10, 80, 8)
     ns = np.round((n*pcts)/100.)
-    ssqs = np.linspace(1, 10, 5)
+    ssqs = np.linspace(1, 10, 3)
     ws = R.ws
     for j, si in enumerate(ssqs):
         R = Resp(S, si, R.wt, R.ws)
@@ -44,15 +44,18 @@ def main():
     df = pd.DataFrame(rows, columns=['name', 'ssq', 'n', 'rmse'])
     ylim = df.rmse.min(), df.rmse.max()
     for ssq, dfc in df.groupby('ssq'):
+        plt.clf()
         ax = plt.gca()
-        dfc.groupby('name', as_index=False).plot('n', 'rmse', ax=ax)
+        for name, dfcp in dfc.groupby('name'):
+            dfcp.plot('n', 'rmse', ax=ax, label=name)
         plt.xlabel('n')
         plt.ylabel('rmse')
         plt.ylim(ylim)
         plt.title('ssq = {0}'.format(ssq))
         plt.legend()
-        plt.show()
-    1/0
+        plt.savefig('/Users/mobeets/Desktop/ssq-{0}.png'.format(ssq))
+        # plt.show()
+    # 1/0
 
 if __name__ == '__main__':
     main()
