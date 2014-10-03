@@ -1,4 +1,6 @@
 import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
 
 import linreg
 import asdard
@@ -13,38 +15,44 @@ def main():
     R = Resp(S)
     # plot(S, R)
     
-    rs = []
-    ss = []
-    ts = []
-    pcts = np.linspace(10, 80, 10)
+    rows = []
+    pcts = np.linspace(10, 80, 8)
     ns = np.round((n*pcts)/100.)
+    ssqs = np.linspace(1, 10, 5)
     ws = R.ws
-    for i, ni in enumerate(ns):
-        print '{0} of {1}: {2}'.format(i+1, len(ns), ni)
+    for j, si in enumerate(ssqs):
+        R = Resp(S, si, R.wt, R.ws)
+        for i, ni in enumerate(ns):
+            print '{0} of {1}: {2}, {3}'.format(j*len(ns)+ i+1, len(ns)*len(ssqs), ni, si)
 
-        X = S.Xs[1:ni, :]
-        Y = R.Y[1:ni]
-        D = S.D
+            X = S.Xs[1:ni, :]
+            Y = R.Y[1:ni]
+            D = S.D
 
-        whs1 = linreg.solve(X, Y)
-        whs2, _, _ = asdard.ARD(X, Y)
-        whs3, _, _ = asdard.ASD_FP(X, Y, D)
+            whs1 = linreg.solve(X, Y)
+            whs2, _, _ = asdard.ARD(X, Y)
+            whs3, RegASD, _ = asdard.ASD_FP(X, Y, D)
+            whs4, _ = asdard.ASDRD(X, Y, RegASD)
 
-        rs.append(rmse(whs1, ws))
-        ss.append(rmse(whs2, ws))
-        ts.append(rmse(whs3, ws))
+            rows.append(('ols', si, ni, rmse(whs1, ws)))
+            rows.append(('ard', si, ni, rmse(whs2, ws)))
+            rows.append(('asd', si, ni, rmse(whs3, ws)))
+            rows.append(('asdrd', si, ni, rmse(whs4, ws)))
 
-        print 'here'
+            print 'here'
 
-        # X2 = S.Xs[ni+1:, :]
-        # Y2 = R.Y[ni+1:]
-
-        # rs.append(rmse(X2.dot(whs1), Y2))
-        # ss.append(rmse(X2.dot(whs2), Y2))
-        # ts.append(rmse(X2.dot(whs3), Y2))
-
-    plotT(pcts, [rs, ss, ts], ['ols', 'ard', 'asd'], ['b', 'g', 'r'])
-    # 1/0
+    df = pd.DataFrame(rows, columns=['name', 'ssq', 'n', 'rmse'])
+    ylim = df.rmse.min(), df.rmse.max()
+    for ssq, dfc in df.groupby('ssq'):
+        ax = plt.gca()
+        dfc.groupby('name', as_index=False).plot('n', 'rmse', ax=ax)
+        plt.xlabel('n')
+        plt.ylabel('rmse')
+        plt.ylim(ylim)
+        plt.title('ssq = {0}'.format(ssq))
+        plt.legend()
+        plt.show()
+    1/0
 
 if __name__ == '__main__':
     main()

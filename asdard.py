@@ -142,7 +142,7 @@ def ASD_FP(X, Y, D, theta0=(8.0, 2.0, 0.1), maxiters=10000, step=0.01, tol=1e-6,
     der_hyper, (mu, sigma, Reg, RegInv, sse) = ASDEviGradient(hyper, X, Y, XX, XY, p, q, D)
     return mu, Reg, hyper
 
-def ARD(X, Y, niters=10000):
+def ARD(X, Y, niters=10000, tol=1e-6):
     """
     X - (p x q) matrix with inputs in rows
     Y - (p, 1) matrix with measurements
@@ -158,38 +158,43 @@ def ARD(X, Y, niters=10000):
     
     # initialize parameters
     sigma_sq = 0.1        
-    alpha = 2*np.ones([q, 1])
+    alpha = 2*np.ones(q)
 
     for i in xrange(niters):
-        RegInv = np.diagflat(alpha)
+        RegInv = np.diag(alpha)
         sigma = PostCov(RegInv, XX, sigma_sq)
         mu = PostMean(sigma, XY, sigma_sq)
-        err = Y - X.dot(mu)
-        sse = err.dot(err.T)
-        v = p - np.sum(1 - np.multiply(np.mat(np.diagonal(sigma)).T, alpha))
-        sigma_sq = np.sum(sse/v)
-        va = alpha.T.dot(np.diagonal(sigma))
-        alpha = np.divide((1 - va), np.power(mu, 2))
+        sse = np.power(Y - X.dot(mu), 2).sum()
+        v = 1 - np.diagonal(sigma)*alpha
+
+        old_alpha = alpha
+        old_sigma_sq = sigma_sq
+        alpha = v/(mu**2)
+        sigma_sq = sse/(p - v.sum())
+        if np.abs(sigma_sq - old_sigma_sq) < tol and np.abs(alpha - old_alpha).sum() < tol:
+            break
 
     RegInv = np.diagflat(alpha)
     sigma = PostCov(RegInv, XX, sigma_sq)
     mu = PostMean(sigma, XY, sigma_sq)
     return mu, RegInv, (alpha, sigma_sq)
     
-def ASDRD(X, Y, S):
+def ASDRD(X, Y, RegASD):
     """
     X - (p x q) matrix with inputs in rows
     Y - (p, 1) matrix with measurements
+    RegASD - (q x q) ASD regularizer solution
     
-    Implelements the ARD regression, adapted from:
+    Implelements ARD regression in an ASD basis (aka ASD/RD), adapted from:
         M. Sahani and J. F. Linden.
         Evidence optimization techniques for estimating stimulus-response functions.
         In S. Becker, S. Thrun, and K. Obermayer, eds., Advances in Neural Information Processing Systems, vol. 15, pp. 301-308, Cambridge, MA, 2003. 
     """
-    D, V = np.linalg.eigh(S)
+    D, V = np.linalg.eigh(RegASD) # RegASD = V * D * V^T
     # V = np.mat(V)
-    D = np.diag(np.sqrt(D))
-    R = V.dot(D).dot(V.T)
-    w = ARD(X.dot(R),Y)
-    w = R.dot(w)
-    return w
+    D2 = np.diag(np.sqrt(D)) # is this the correct interpretation of D2?
+    R = V.dot(D2).dot(V.T)
+    wp, RegInvP, _ = ARD(X.dot(R), Y)
+    w = R.dot(wp)
+    RegInv = R.dot(RegInvP).dot(R.T)
+    return w, RegInv
