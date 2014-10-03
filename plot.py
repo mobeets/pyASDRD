@@ -19,12 +19,12 @@ def plot(S, R, i=0):
         plt.colorbar()
         plt.show()
 
-def plotT(pcts, rs):
-    cs = ['b', 'g', 'r', 'k', 'c']
-    for i, r in enumerate(rs):
-        plt.plot(pcts, r, '-' + cs[i])
+def plotT(pcts, rs, ls, cs):
+    for r,l,c in zip(rs, ls, cs):
+        plt.plot(pcts, r, '-' + c, label=l)
     plt.xlabel('%')
     plt.ylabel('rmse')
+    plt.legend()
     # plt.xscale('log')
     # plt.yscale('log')
     plt.show()

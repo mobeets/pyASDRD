@@ -2,7 +2,7 @@ import numpy as np
 import scipy.stats
 
 class Resp:
-    def __init__(self, S, ssq=3.0, wt=None, ws=None):
+    def __init__(self, S, ssq=8.0, wt=None, ws=None):
         """
         S.X is space-time stimulus on each trial
         S.xy is x,y locations of space as represented in stimulus
