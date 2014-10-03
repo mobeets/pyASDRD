@@ -8,15 +8,28 @@ def PostCov(RegInv, XX, sigma_sq):
 def PostMean(sigma, XY, sigma_sq):
     return sigma.dot(XY)/sigma_sq
 
-def ASDReg(ro, D, delta_s):
-    return np.exp(-ro-0.5*D/(delta_s**2))
+def ASDReg(ro, ds):
+    """
+    ro - float
+    ds - list of tuples [(D, d), ...]
+        D - (q x q) squared distance matrix in some stimulus dimension
+        d - float, the weighting of D
+    """
+    vs = 0.0
+    for D, d in ds:
+        if vs == 0.0:
+            vs = np.zeros(D.shape)
+        vs += D/(d**2)
+    return np.exp(-ro-0.5*vs)
 
-def ASDEviGradient((ro, delta_s, sigma_sq), X, Y, XX, XY, p, q, D):
+def ASDEviGradient(hyper, X, Y, XX, XY, p, q, Ds):
     """
     gradient of log evidence w.r.t. hyperparameters
     """
+    (ro, sigma_sq, delta_s) = hyper
+    D = Ds[0]
     # update regularizer
-    Reg = ASDReg(ro, D, delta_s)
+    Reg = ASDReg(ro, [(D, delta_s)])
     RegInv = np.linalg.inv(Reg)
 
     # posterior cov and mean
@@ -35,7 +48,7 @@ def ASDEviGradient((ro, delta_s, sigma_sq), X, Y, XX, XY, p, q, D):
     der_delta_s = -0.5*np.trace(Z.dot(Reg * D/(delta_s**3)).dot(RegInv))
     der_sigma_sq = sse/(sigma_sq**2) + v/sigma_sq
 
-    return (der_ro, der_delta_s, der_sigma_sq), (mu, sigma, Reg, RegInv, sse)
+    return (der_ro, der_sigma_sq, der_delta_s), (mu, sigma, Reg, RegInv, sse)
 
 logDet = lambda x: np.linalg.slogdet(x)[1]
 def ASDEvi(X, Y, Reg, sigma, sigma_sq, p, q):
@@ -49,7 +62,7 @@ def ASDEvi(X, Y, Reg, sigma, sigma_sq, p, q):
     B = (np.eye(p)/sigma_sq) - (X.dot(sigma).dot(X.T))/(sigma_sq**2)
     return 0.5*(logZ - Y.T.dot(B).dot(Y))
 
-def ASD(X, Y, D, theta0=(8.0, 2.0, 0.1), method='SLSQP'):
+def ASD(X, Y, D, theta0=(8.0, 0.1, 2.0), method='SLSQP'):
     """
     X - (p x q) matrix with inputs in rows
     Y - (p, 1) matrix with measurements
@@ -66,9 +79,9 @@ def ASD(X, Y, D, theta0=(8.0, 2.0, 0.1), method='SLSQP'):
     """
 
     def objfun_maker(X, Y, XX, XY, p, q, D):
-        def objfcn((ro, delta_s, sigma_sq)):
-            hyper = (ro, delta_s, sigma_sq)
-            der_hyper, (mu, sigma, Reg, RegInv, sse) = ASDEviGradient(hyper, X, Y, XX, XY, p, q, D)
+        def objfcn((ro, sigma_sq, delta_s)):
+            hyper = (ro, sigma_sq, delta_s)
+            der_hyper, (mu, sigma, Reg, RegInv, sse) = ASDEviGradient(hyper, X, Y, XX, XY, p, q, [D])
             evi = ASDEvi(X, Y, Reg, sigma, sigma_sq, p, q)
             # print -evi, hyper, der_hyper
             return -evi, -np.array(der_hyper)
@@ -80,15 +93,15 @@ def ASD(X, Y, D, theta0=(8.0, 2.0, 0.1), method='SLSQP'):
 
     objfcn = objfun_maker(X, Y, XX, XY, p, q, D)
     # bounds = [(-20.0, 20.0), (10e-6, 10e6), (10e-6, 10e6)]
-    bounds = [(-20.0, 20.0), (0.5, None), (1e-5, None)]
+    bounds = [(-20.0, 20.0), (1e-5, None), (0.5, None)]
     theta = scipy.optimize.minimize(objfcn, theta0, bounds=bounds, method=method, jac=True)
     if not theta['success']:
         print theta
     hyper = theta['x']
-    der_hyper, (mu, sigma, Reg, RegInv, sse) = ASDEviGradient(hyper, X, Y, XX, XY, p, q, D)
+    der_hyper, (mu, sigma, Reg, RegInv, sse) = ASDEviGradient(hyper, X, Y, XX, XY, p, q, [D])
     return mu, Reg, hyper
 
-def ASD_FP(X, Y, D, theta0=(8.0, 2.0, 0.1), maxiters=10000, step=0.01, tol=1e-6,):
+def ASD_FP(X, Y, D, theta0=(8.0, 0.1, 2.0), maxiters=10000, step=0.01, tol=1e-6,):
     """
     X - (p x q) matrix with inputs in rows
     Y - (p, 1) matrix with measurements
@@ -115,9 +128,9 @@ def ASD_FP(X, Y, D, theta0=(8.0, 2.0, 0.1), maxiters=10000, step=0.01, tol=1e-6,
     der_delta_s_m = 0
     der_sigma_sq_m = 0
     for i in xrange(maxiters):
-        (ro, delta_s, sigma_sq) = hyper
-        der_hyper, (mu, sigma, Reg, RegInv, sse) = ASDEviGradient(hyper, X, Y, XX, XY, p, q, D)
-        (der_ro, der_delta_s, der_sigma_sq) = der_hyper
+        (ro, sigma_sq, delta_s) = hyper
+        der_hyper, (mu, sigma, Reg, RegInv, sse) = ASDEviGradient(hyper, X, Y, XX, XY, p, q, [D])
+        (der_ro, der_sigma_sq, der_delta_s) = der_hyper
         
         if der_ro_m*der_ro + der_delta_s_m*der_delta_s < 0:
             step *= 0.8
@@ -134,12 +147,12 @@ def ASD_FP(X, Y, D, theta0=(8.0, 2.0, 0.1), maxiters=10000, step=0.01, tol=1e-6,
         sigma_sq = -sse/v
 
         hyper_prev = hyper
-        hyper = (ro, delta_s, sigma_sq)
+        hyper = (ro, sigma_sq, delta_s)
         if (np.abs(np.array(hyper_prev) - np.array(hyper)) < tol).all():
             break
         # print hyper, der_hyper
 
-    der_hyper, (mu, sigma, Reg, RegInv, sse) = ASDEviGradient(hyper, X, Y, XX, XY, p, q, D)
+    der_hyper, (mu, sigma, Reg, RegInv, sse) = ASDEviGradient(hyper, X, Y, XX, XY, p, q, [D])
     return mu, Reg, hyper
 
 def ARD(X, Y, niters=10000, tol=1e-6):
