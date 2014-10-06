@@ -19,7 +19,7 @@ def plot(S, R, i=0):
         plt.colorbar()
         plt.show()
 
-def plotT(pcts, rs, ls, cs):
+def T(pcts, rs, ls, cs):
     for r,l,c in zip(rs, ls, cs):
         plt.plot(pcts, r, '-' + c, label=l)
     plt.xlabel('%')
@@ -27,4 +27,22 @@ def plotT(pcts, rs, ls, cs):
     plt.legend()
     # plt.xscale('log')
     # plt.yscale('log')
+    plt.show()
+
+def XY(S, R):
+    phi = np.linspace(0.0,2*np.pi,100)
+    na = np.newaxis
+    x = S.xy[:,0]
+    y = S.xy[:,1]
+    r = R.ws**0.5
+    x_line = x[na,:] + r[na,:]*np.sin(phi[:,na])
+    y_line = y[na,:] + r[na,:]*np.cos(phi[:,na])
+    plt.plot(x_line, y_line, '-k')
+
+    plt.plot(x, y, '.k', alpha=0.5)
+    plt.gca().axis('equal')
+    lim = (S.xy.min(), S.xy.max())
+    plt.xlim(lim)
+    plt.ylim(lim)
+    plt.tight_layout()
     plt.show()

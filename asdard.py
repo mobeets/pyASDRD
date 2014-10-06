@@ -1,6 +1,13 @@
 import numpy as np
 import scipy.optimize
 
+def confine_to_bounds(theta, bounds):
+    ts = []
+    for i, ((lb, ub), tc) in enumerate(zip(bounds, theta)):
+        tc = lb if (tc < lb and lb is not None) else tc
+        tc = ub if (tc > ub and ub is not None) else tc
+        ts.append(tc)
+    return tuple(ts)
 
 def PostCov(RegInv, XX, sigma_sq):
     return np.linalg.inv((XX/sigma_sq) + RegInv)
@@ -17,7 +24,7 @@ def ASDReg(ro, ds):
     """
     vs = 0.0
     for D, d in ds:
-        if vs == 0.0:
+        if not hasattr(vs, 'shape'):
             vs = np.zeros(D.shape)
         vs += D/(d**2)
     return np.exp(-ro-0.5*vs)
@@ -27,6 +34,8 @@ def ASDEviGradient(hyper, X, Y, XX, XY, p, q, Ds):
     gradient of log evidence w.r.t. hyperparameters
     """
     ro, sigma_sq = hyper[:2]
+    if np.isinf(np.exp(-ro)):
+        raise Exception("Invalid ro: {0}".format(ro))
     deltas = hyper[2:]
     assert len(Ds) == len(deltas)
     ds = zip(Ds, deltas)
@@ -34,6 +43,10 @@ def ASDEviGradient(hyper, X, Y, XX, XY, p, q, Ds):
     # update regularizer
     Reg = ASDReg(ro, ds)
     RegInv = np.linalg.inv(Reg)
+    if np.isinf(Reg).all():
+        raise Exception("Reg is inf.")
+    if np.isnan(RegInv).all():
+        raise Exception("RegInv is nan.")
 
     # posterior cov and mean
     sigma =  PostCov(RegInv, XX, sigma_sq)
@@ -51,6 +64,8 @@ def ASDEviGradient(hyper, X, Y, XX, XY, p, q, Ds):
         der_deltas.append(-0.5*np.trace(Z.dot(Reg * D/(d**3)).dot(RegInv)))
     der_hyper = (der_ro, der_sigma_sq) + tuple(der_deltas)
 
+    if np.isnan(np.array(der_hyper)).any():
+        raise Exception("der_hyper is nan: {0}".format(der_hyper))
     return der_hyper, (mu, sigma, Reg, RegInv, sse)
 
 logDet = lambda x: np.linalg.slogdet(x)[1]
@@ -78,10 +93,11 @@ def ASD(X, Y, Ds, theta0=None, method='SLSQP'):
     Implelements the ASD regression descrived in:
         M. Sahani and J. F. Linden.
         Evidence optimization techniques for estimating stimulus-response functions.
-        In S. Becker, S. Thrun, and K. Obermayer, eds., Advances in Neural Information Processing Systems, vol. 15, pp. 301-308, Cambridge, MA, 2003. 
+        In S. Becker, S. Thrun, and K. Obermayer, eds.
+        Advances in Neural Information Processing Systems, vol. 15, pp. 301-308, Cambridge, MA, 2003
     """
     if theta0 is None:
-        theta0 = (8.0, 0.1) + (2.0,)*len(Ds)
+        theta0 = (-1.0, 0.1) + (2.0,)*len(Ds)
 
     def objfun_maker(X, Y, XX, XY, p, q, Ds):
         def objfcn(hyper):
@@ -92,7 +108,7 @@ def ASD(X, Y, Ds, theta0=None, method='SLSQP'):
             return -evi, -np.array(der_hyper)
         return objfcn
 
-    p, q = np.shape(X)
+    p, q = X.shape
     XY = X.T.dot(Y)
     XX = X.T.dot(X)
 
@@ -119,12 +135,14 @@ def ASD_FP(X, Y, Ds, theta0=None, maxiters=10000, step=0.01, tol=1e-6,):
     Implelements the ASD regression descrived in:
         M. Sahani and J. F. Linden.
         Evidence optimization techniques for estimating stimulus-response functions.
-        In S. Becker, S. Thrun, and K. Obermayer, eds., Advances in Neural Information Processing Systems, vol. 15, pp. 301-308, Cambridge, MA, 2003. 
+        In S. Becker, S. Thrun, and K. Obermayer, eds.
+        Advances in Neural Information Processing Systems, vol. 15, pp. 301-308, Cambridge, MA, 2003
     """
     if theta0 is None:
-        theta0 = (8.0, 0.1) + (2.0,)*len(Ds)
+        theta0 = (-1.0, 0.1) + (2.0,)*len(Ds)
+    theta_bounds = [(-20.0, 20.0), (None, None)] + [(0.5, None)]*len(Ds)
 
-    p, q = np.shape(X)
+    p, q = X.shape
     XY = X.T.dot(Y)
     XX = X.T.dot(X)
     
@@ -164,6 +182,7 @@ def ASD_FP(X, Y, Ds, theta0=None, maxiters=10000, step=0.01, tol=1e-6,):
 
         hyper_prev = hyper
         hyper = (ro, sigma_sq) + tuple(deltas)
+        hyper = confine_to_bounds(hyper, theta_bounds)
         if (np.abs(np.array(hyper_prev) - np.array(hyper)) < tol).all():
             break
 
@@ -178,9 +197,10 @@ def ARD(X, Y, niters=10000, tol=1e-6):
     Implelements the ARD regression, adapted from:
         M. Sahani and J. F. Linden.
         Evidence optimization techniques for estimating stimulus-response functions.
-        In S. Becker, S. Thrun, and K. Obermayer, eds., Advances in Neural Information Processing Systems, vol. 15, pp. 301-308, Cambridge, MA, 2003. 
+        In S. Becker, S. Thrun, and K. Obermayer, eds.
+        Advances in Neural Information Processing Systems, vol. 15, pp. 301-308, Cambridge, MA, 2003
     """
-    (p,q) = np.shape(X)
+    (p,q) = X.shape
     XX = X.T.dot(X)
     XY = X.T.dot(Y)
     
@@ -216,12 +236,11 @@ def ASDRD(X, Y, RegASD):
     Implelements ARD regression in an ASD basis (aka ASD/RD), adapted from:
         M. Sahani and J. F. Linden.
         Evidence optimization techniques for estimating stimulus-response functions.
-        In S. Becker, S. Thrun, and K. Obermayer, eds., Advances in Neural Information Processing Systems, vol. 15, pp. 301-308, Cambridge, MA, 2003. 
+        In S. Becker, S. Thrun, and K. Obermayer, eds.
+        Advances in Neural Information Processing Systems, vol. 15, pp. 301-308, Cambridge, MA, 2003
     """
     D, V = np.linalg.eigh(RegASD) # RegASD = V * D * V^T
-    # V = np.mat(V)
-    D2 = np.diag(np.sqrt(D)) # is this the correct interpretation of D2?
-    R = V.dot(D2).dot(V.T)
+    R = V.dot(np.diag(np.sqrt(D))).dot(V.T) # R = RegASD^(1/2)
     wp, RegInvP, _ = ARD(X.dot(R), Y)
     w = R.dot(wp)
     RegInv = R.dot(RegInvP).dot(R.T)
