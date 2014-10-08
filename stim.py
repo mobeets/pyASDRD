@@ -9,13 +9,14 @@ class Stim:
         self.X = self.stim(self.n, self.nt, self.ns)
         self.xy = randomPoints(self.ns) if xy is None else xy
         self.D = sqdist(self.xy)
-        self.Xb, self.Xs, self.Xt = self.marginals(self.X, self.n, self.nt, self.ns)
+        self.Xf, self.Xs, self.Xt, self.Xm = self.marginals(self.X, self.n, self.nt, self.ns)
 
     def marginals(self, X, n, nt, ns):
-        Xb = np.reshape(X, [n, nt*ns]) # reshape
+        Xf = np.reshape(X, [n, nt*ns]) # reshape
         Xs = np.sum(X, 1) # sum across time
         Xt = np.sum(X, 2) # sum across space
-        return Xb, Xs, Xt
+        Xm = np.sum(Xf, 1) # sum across space and time
+        return Xf, Xs, Xt, Xm
 
     def stim(self, n, nt, ns, mags=[2,5,8]):#, maxPulse=8):
         pulses = np.hstack([-np.array(mags[::-1]), 0, mags])
