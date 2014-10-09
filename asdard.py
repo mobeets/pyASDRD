@@ -189,10 +189,12 @@ def ASD_FP(X, Y, Ds, theta0=None, maxiters=10000, step=0.01, tol=1e-6,):
     der_hyper, (mu, sigma, Reg, RegInv, sse) = ASDEviGradient(hyper, X, Y, XX, XY, p, q, Ds)
     return mu, Reg, hyper
 
-def ARD(X, Y, niters=10000, tol=1e-6):
+def ARD(X, Y, niters=10000, tol=1e-6, alpha_thresh=1e-4):
     """
     X - (p x q) matrix with inputs in rows
     Y - (p, 1) matrix with measurements
+
+    n.b. should threshold alpha
     
     Implelements the ARD regression, adapted from:
         M. Sahani and J. F. Linden.
@@ -207,6 +209,8 @@ def ARD(X, Y, niters=10000, tol=1e-6):
     # initialize parameters
     sigma_sq = 0.1        
     alpha = 2*np.ones(q)
+
+    keep_alpha = np.ones(q, dtype=bool)
 
     for i in xrange(niters):
         RegInv = np.diag(alpha)

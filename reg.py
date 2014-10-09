@@ -21,15 +21,21 @@ def bilinear(X, Y, niters=1000):
         whs = ols(wht.dot(X), Y)
     return whs, wht
 
-def ridge(X, Y, alphas=[0.1, 1.0, 10.0]):
-    clf = sklearn.linear_model.RidgeCV(alphas=alphas, fit_intercept=False, normalize=False)
+def ridge(X, Y):
+    # clf = sklearn.linear_model.RidgeCV(alphas=alphas, fit_intercept=False, normalize=False)
+    clf = sklearn.linear_model.BayesianRidge()
     clf.fit(X, Y)
-    return clf.coef_, clf.alpha_
+    return clf.coef_, (clf.alpha_, clf.lambda_)
 
-def lasso(X, Y):
+def lasso(X, Y, alphas=[0.1, 1.0, 10.0]):
     clf = sklearn.linear_model.LassoCV(alphas=alphas, fit_intercept=False, normalize=False)
     clf.fit(X, Y)
     return clf.coef_, clf.alpha_
+
+def ARD(X, Y):
+    clf = sklearn.linear_model.ARDRegression(fit_intercept=False, normalize=False)
+    clf.fit(X, Y)
+    return clf.coef_, (clf.alpha_, clf.lambda_)
 
 def predict(X, w1, w2=None):
     if w2 is None:
