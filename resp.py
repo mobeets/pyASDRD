@@ -2,7 +2,7 @@ import numpy as np
 import scipy.stats
 
 class Resp:
-    def __init__(self, S, ssq=8.0, wt=None, ws=None, signalType='bilinear'):
+    def __init__(self, S, ssq=12.0, wt=None, ws=None, signalType='bilinear'):
         """
         S.X is space-time stimulus on each trial
         S.xy is x,y locations of space as represented in stimulus
@@ -39,21 +39,6 @@ class Resp:
         self.Ysig = self.sig_fcn(X, wf, wt, ws) # signal
         self.Ynse = np.random.normal(0, np.sqrt(ssq), n) # noise
         return self.Ysig + self.Ynse
-
-def predict(X, w1, w2=None):
-    if w2 is None:
-        if len(w1.shape) == 1 or w1.shape[1] == 1:
-            if X.shape[-1] == w1.shape[0]:
-                return X.dot(w1)
-            elif X.shape[0] == w1.shape[0]:
-                return w1.dot(X)
-        elif (X.shape[-1] == w1.shape[-1]) and (X.shape[-2] == w1.shape[-2]):
-            return np.einsum('abc,bc -> a', X, w1)
-    elif X.shape[-1] == w2.shape[0]:
-        return w1.dot(X).dot(w2)
-    elif X.shape[0] == w2.shape[0]:
-        return w2.dot(X).dot(w1)
-    raise Exception("Bad shapes = no prediction.")
 
 def randomFullRank(nt, ns):
     return np.random.rand(nt, ns)

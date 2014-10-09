@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
-import linreg
+import reg
 import asdard
 from resp import Resp
 from stim import Stim
@@ -29,7 +29,7 @@ def main():
             Y = R.Y[1:ni]
             D = S.D
 
-            whs1 = linreg.solve(X, Y)
+            whs1 = reg.OLS(X, Y)
             whs2, _, _ = asdard.ARD(X, Y)
             whs3, RegASD, _ = asdard.ASD_FP(X, Y, D)
             whs4, _ = asdard.ASDRD(X, Y, RegASD)
