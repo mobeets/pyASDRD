@@ -6,10 +6,10 @@ rmse = lambda Y, Yh: np.sqrt(np.mean((Yh - Y) ** 2))
 def rmse_clf(clf, X, Y):
     return rmse(clf.predict(X), Y)
 
-def ols(X, Y):
+def ols2(X, Y):
     return np.linalg.lstsq(X, Y)[0]
 
-def ols2(X, Y):
+def ols(X, Y):
     clf = sklearn.linear_model.LinearRegression(fit_intercept=False, normalize=False)
     clf.fit(X, Y)
     return clf.coef_
@@ -19,7 +19,7 @@ def bilinear(X, Y, niters=1000):
     for _ in xrange(niters):
         wht = ols(X.dot(whs), Y)
         whs = ols(wht.dot(X), Y)
-    return whs, wht
+    return wht, whs
 
 def ridge(X, Y):
     # clf = sklearn.linear_model.RidgeCV(alphas=alphas, fit_intercept=False, normalize=False)
@@ -57,7 +57,7 @@ def trainAndTest(X, Y, trainPct=0.9):
     """
     returns (X,Y) split into training and testing sets
     """
-    X0, X1, Y0, Y1 = sklearn.cross_validation(X, Y, trainPct)
+    X0, X1, Y0, Y1 = sklearn.cross_validation.train_test_split(X, Y, train_size=trainPct, random_state=17)
     return (X0, Y0), (X1, Y1)
 
 def kFold(X, Y, K=10, shuffle=False):
