@@ -137,13 +137,10 @@ def plotFull(xy, wf):
         plt.subplot(nt, 1, i+1)
         plot(xy, wf[i,:])
         plt.ylabel('t={0}'.format(i), rotation='horizontal', horizontalalignment='right')
-    plt.gcf().set_size_inches(18.5,10.5)
     plt.show()
 
 if __name__ == '__main__':
     from stim import Stim
-    nt = 7
-    s = Stim(100, nt, 25)
+    s = Stim(100, 7, 25)
     r = Resp(s, signalType='rank-3')
     plotFull(s.xy, r.wf)
-
