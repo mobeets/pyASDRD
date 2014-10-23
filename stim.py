@@ -7,7 +7,7 @@ class Stim:
         self.nt = nt
         self.ns = ns
         self.X = self.stim(self.n, self.nt, self.ns)
-        self.xy = randomPoints(self.ns) if xy is None else xy
+        self.xy = griddedPoints(self.ns) if xy is None else xy
         self.D = sqdist(self.xy)
         self.Xf, self.Xs, self.Xt, self.Xm = self.marginals(self.X, self.n, self.nt, self.ns)
 
@@ -37,6 +37,17 @@ def randomPoints(nw, b=5, n=100):
     x = xi[idx[0,:]]
     y = yi[idx[1,:]]
     return np.vstack([x, y]).T
+
+def griddedPoints(nw, b=5, hexLike=True):
+    assert np.round(np.sqrt(nw))**2 == nw
+    nx = np.round(np.sqrt(nw))
+    ny = nw*1.0/nx
+    xi = np.linspace(-b, b, nx)
+    yi = np.linspace(-b, b, ny)
+    zi = np.meshgrid(xi, yi)
+    if hexLike:
+        zi[0][0::2,:] += np.diff(xi).min()/2.0
+    return np.array(zip(zi[0].flatten(), zi[1].flatten()))
 
 def sqdist(xy):
     return scipy.spatial.distance.squareform(scipy.spatial.distance.pdist(xy, 'euclidean'))**2

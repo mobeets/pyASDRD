@@ -1,26 +1,55 @@
-import numpy as np
 import scipy.stats
+import numpy as np
+import matplotlib.pyplot as plt
 
 class Resp:
-    def __init__(self, S, ssq=12.0, wt=None, ws=None, signalType='bilinear'):
+    def __init__(self, S, ssq=12.0, wt=None, ws=None, wf=None, signalType='bilinear'):
         """
         S.X is space-time stimulus on each trial
         S.xy is x,y locations of space as represented in stimulus
         ssq is variance of noise in response
-        wt, ws are the time and space weights, respectively
-        signalType is either 'bilinear', 'spacey', or 'full' [default]
+        wt, ws, wf are the time, space, or full weights, respectively
+        signalType in ['bilinear', 'spacey', 'full', 'rank-k'] where k is int
         
-        returns the space-time separable weighted response to the given stimulus
+        calculates the weighted response to the given stimulus
         """
         self.ssq = ssq
         (n, nt, ns) = S.X.shape
         self.signalType = signalType
-        self.wt = randomTimeWeights(nt) if wt is None else wt
-        self.ws = 10*randomGaussianWeights(S.xy) if ws is None else ws
-        self.wf = randomFullRank(nt, ns)
-        self.signalType = signalType
-        if self.signalType == 'bilinear':
-            self.ws = self.ws*(np.sum(self.wt)/np.sum(self.ws)) # scale so space and time roughly equal
+        if self.signalType == 'full':
+            self.wf = randomFullRank(nt, ns)
+            self.wt = None
+            self.ws = None
+            self.sig_fcn = self.full_signal
+        elif self.signalType == 'spacey':
+            self.ws = 10*randomGaussianWeights(S.xy)
+            self.wt = None
+            self.wf = None
+            self.sig_fcn = self.spacey_signal
+        elif self.signalType == 'bilinear':
+            self.wt, self.ws = randomBilinear(nt, S.xy, norm=True)
+            self.wf = None
+            self.sig_fcn = self.bilinear_signal
+        elif self.signalType.startswith('rank-'):
+            k = int(self.signalType.split('rank-')[1])
+            self.wf = randomRankK(nt, ns, S.xy, k=k)
+            self.wt = None
+            self.ws = None
+            self.sig_fcn = self.full_signal
+        elif ws is not None:
+            self.ws = ws
+            self.wf = None
+            if wt is not None:
+                self.wt = wt
+                self.sig_fcn = self.bilinear_signal
+            else:
+                self.sig_fcn = self.spacey_signal
+                self.wt = None
+        elif wf is not None:
+            self.wf = wf
+            self.wt = None
+            self.ws = None
+            self.sig_fcn = self.full_signal
         self.sig_fcn_lkp = {'bilinear': self.bilinear_signal, 'spacey': self.spacey_signal, 'full': self.full_signal}
         self.sig_fcn = self.sig_fcn_lkp.get(self.signalType, self.full_signal)
         self.Y = self.resp(S.X, self.wf, self.wt, self.ws, self.ssq)
@@ -43,21 +72,74 @@ class Resp:
 def randomFullRank(nt, ns):
     return np.random.rand(nt, ns)
 
-def randomTimeWeights(nt, k=5, th=1):
+def randomBilinear(nt, xy, norm=True):
+    wt = randomTimeWeights(nt)
+    ws = randomGaussianWeights(xy)
+    if norm:
+        # scale so space and time roughly equal
+        ws = ws*(np.sum(wt)/np.sum(ws))
+    return wt, ws
+
+def randomRankK(nt, ns, xy, k=1):
+    wfs = np.zeros([nt, ns, k])
+    lastFirstBigger = False
+    isFirstBigger = lambda wt: wt[:(nt/2)].sum() > wt[-(nt/2):].sum()
+    for i in xrange(k):
+        wt, ws = randomBilinear(nt, xy, norm=True)
+        if lastFirstBigger and isFirstBigger(wt):
+            # reverse time weight to keep them distinct
+            wt = wt[::(2*(i%2) - 1)]
+        lastFirstBigger = isFirstBigger(wt)
+        wf = np.vstack(wt).dot(np.vstack(ws).T)
+        wfs[:,:,i] = wf/wf.max()
+    return wfs.sum(2)
+
+def randomTimeWeights(nt):
+    k = 4*np.random.random()+1
+    th = np.random.random()+1
     x = np.arange(nt)
     wt_fcn = lambda k, th: (x**(k-1))*np.exp(-x/float(th))
-    return wt_fcn(k, th)
+    return wt_fcn(k, th)+1
 
-def randomGaussianWeights(pts, mu=None, cov=None):
+def randomGaussianWeights(xy, a=None, b=None):
     """
+    xy is nw-by-2
+    mu and cov parameterize the 2d gaussian
+
     returns a vector of weights, where the weight of a
     point is given by the pdf of a 2d gaussian at that location.
-    
-    pts is nw-by-2; if false, pts will be randomly chosen
-    mu and cov parameterize the 2d gaussian
     """
-    if mu is None:
-        mu = np.mean(pts, 0) + 1
-    if cov is None:
-        cov = np.std(pts, 0)/3.0
-    return scipy.stats.multivariate_normal.pdf(pts, mu, cov)
+    a = 10*np.random.random() - 5 if a is None else a
+    b = 1 if b is None else b
+    mu = np.mean(xy, 0) + a
+    cov = np.std(xy, 0) * b
+    return scipy.stats.multivariate_normal.pdf(xy, mu, cov)
+
+def plot(xy, wf, t=1, sz=0.5*1e2):
+    ws = wf[t,:]
+    ws = ws/ws.max() if ws.max() > 0.0 else np.array([0.0]*len(ws))
+    ws = 1.0 - ws
+    cs = [str(w) for w in ws] # [(w, w, w) for w in ws]
+    plt.scatter(xy[:,0], xy[:,1], s=sz, c=cs, lw=0)
+    tm = xy[xy[:,0] == xy[0,0], 1]
+    dist = np.abs(tm.mean() - tm.min())/2.
+    plt.xlim(xy[:,0].min() - dist, xy[:,0].max() + dist)
+    plt.ylim(xy[:,1].min() - dist, xy[:,1].max() + dist)
+
+if __name__ == '__main__':
+    from stim import Stim
+    nt = 7
+    s = Stim(100, nt, 25)
+    r = Resp(s, signalType='rank-3')
+    plt.figure(figsize=(2,8), facecolor="white")
+    for i in xrange(nt):
+        plt.subplot(nt, 1, i+1)
+        plot(s.xy, r.wf, i)
+        plt.ylabel('t={0}'.format(i), rotation='horizontal', horizontalalignment='right')
+        plt.gca().set_aspect('equal')
+        plt.gca().get_xaxis().set_visible(False)
+        plt.gca().tick_params(axis='y', labelleft=False, left=False, right=False)
+        for spine in plt.gca().spines.values():
+            spine.set_edgecolor('0.8')
+    plt.gcf().set_size_inches(18.5,10.5)
+    plt.show()
