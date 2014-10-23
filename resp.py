@@ -81,18 +81,13 @@ def randomBilinear(nt, xy, norm=True):
     return wt, ws
 
 def randomRankK(nt, ns, xy, k=1):
-    wfs = np.zeros([nt, ns, k])
-    lastFirstBigger = False
-    isFirstBigger = lambda wt: wt[:(nt/2)].sum() > wt[-(nt/2):].sum()
+    U = np.zeros([nt, k])
+    V = np.zeros([ns, k])
     for i in xrange(k):
-        wt, ws = randomBilinear(nt, xy, norm=True)
-        if lastFirstBigger and isFirstBigger(wt):
-            # reverse time weight to keep them distinct
-            wt = wt[::(2*(i%2) - 1)]
-        lastFirstBigger = isFirstBigger(wt)
-        wf = np.vstack(wt).dot(np.vstack(ws).T)
-        wfs[:,:,i] = wf/wf.max()
-    return wfs.sum(2)
+        U[:,i], V[:,i] = randomBilinear(nt, xy, norm=True)
+    U, V = U/U.sum(), V/V.sum()
+    S = np.diag(2*np.random.random(k))
+    return U.dot(S).dot(V.T)
 
 def randomTimeWeights(nt):
     k = 4*np.random.random()+1
