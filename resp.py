@@ -127,9 +127,6 @@ def plot(xy, ws, vmax=None, sz=0.5*1e2):
     for spine in plt.gca().spines.values():
         spine.set_edgecolor('0.8')
 
-# def plotBilinear(xy, wt, ws):
-    # plot(xy, wf[
-
 def plotFull(xy, wf):
     nt = wf.shape[0]
     plt.figure(figsize=(2,8), facecolor="white")
