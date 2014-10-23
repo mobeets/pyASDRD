@@ -115,8 +115,7 @@ def randomGaussianWeights(xy, a=None, b=None):
     cov = np.std(xy, 0) * b
     return scipy.stats.multivariate_normal.pdf(xy, mu, cov)
 
-def plot(xy, wf, t=1, sz=0.5*1e2):
-    ws = wf[t,:]
+def plot(xy, ws, sz=0.5*1e2):
     ws = ws/ws.max() if ws.max() > 0.0 else np.array([0.0]*len(ws))
     ws = 1.0 - ws
     cs = [str(w) for w in ws] # [(w, w, w) for w in ws]
@@ -125,21 +124,26 @@ def plot(xy, wf, t=1, sz=0.5*1e2):
     dist = np.abs(tm.mean() - tm.min())/2.
     plt.xlim(xy[:,0].min() - dist, xy[:,0].max() + dist)
     plt.ylim(xy[:,1].min() - dist, xy[:,1].max() + dist)
+    plt.gca().set_aspect('equal')
+    plt.gca().get_xaxis().set_visible(False)
+    plt.gca().tick_params(axis='y', labelleft=False, left=False, right=False)
+    for spine in plt.gca().spines.values():
+        spine.set_edgecolor('0.8')
+
+def plotFull(xy, wf):
+    nt = wf.shape[0]
+    plt.figure(figsize=(2,8), facecolor="white")
+    for i in xrange(nt):
+        plt.subplot(nt, 1, i+1)
+        plot(xy, wf[i,:])
+        plt.ylabel('t={0}'.format(i), rotation='horizontal', horizontalalignment='right')
+    plt.gcf().set_size_inches(18.5,10.5)
+    plt.show()
 
 if __name__ == '__main__':
     from stim import Stim
     nt = 7
     s = Stim(100, nt, 25)
     r = Resp(s, signalType='rank-3')
-    plt.figure(figsize=(2,8), facecolor="white")
-    for i in xrange(nt):
-        plt.subplot(nt, 1, i+1)
-        plot(s.xy, r.wf, i)
-        plt.ylabel('t={0}'.format(i), rotation='horizontal', horizontalalignment='right')
-        plt.gca().set_aspect('equal')
-        plt.gca().get_xaxis().set_visible(False)
-        plt.gca().tick_params(axis='y', labelleft=False, left=False, right=False)
-        for spine in plt.gca().spines.values():
-            spine.set_edgecolor('0.8')
-    plt.gcf().set_size_inches(18.5,10.5)
-    plt.show()
+    plotFull(s.xy, r.wf)
+
