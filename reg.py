@@ -3,11 +3,15 @@ import sklearn.cross_validation
 import sklearn.linear_model
 
 class Fit(object):
-    def __init__(self, (X0, Y0), (X1, Y1)):
+    def __init__(self, X0, Y0, X1=None, Y1=None):
+        """
+        X0, Y0 is training data
+        X1, Y1 is testing data (defaults to training data if not supplied)
+        """
         self.X0 = X0
-        self.X1 = X1
+        self.X1 = X1 if X1 is not None else X0
         self.Y0 = Y0
-        self.Y1 = Y1
+        self.Y1 = Y1 if Y1 is not None else Y0
         self.clf = self.init_clf()
 
     def init_clf(self):
@@ -15,12 +19,15 @@ class Fit(object):
 
     def fit(self):
         self.clf.fit(self.X0, self.Y0)
+        return self
 
     def predict(self):
         self.Yh1 = self.clf.predict(self.X1)
+        return self
 
     def score(self):
         self.rsq = self.clf.score(self.X1, self.Y1)
+        return self
 
 class OLS(Fit):
     def init_clf(self):
@@ -28,10 +35,12 @@ class OLS(Fit):
 
 class Ridge(Fit):
     def init_clf(self):
+        # (clf.alpha_, clf.lambda_)
         return sklearn.linear_model.BayesianRidge()
 
 class Lasso(Fit):
     def __init__(self, *args, **kwargs):
+        # clf.alpha_
         self.alphas = kwargs.pop('alpha', [0.1, 1.0, 10.0])
         super(Lasso, self).__init__(*args, **kwargs)
 
@@ -40,58 +49,29 @@ class Lasso(Fit):
 
 class ARD(Fit):
     def init_clf(self):
+        # (clf.alpha_, clf.lambda_)
         return sklearn.linear_model.ARDRegression(fit_intercept=False, normalize=False)
 
-# rmse = lambda Y, Yh: np.sqrt(np.mean((Yh - Y) ** 2))
-# def rmse_clf(clf, X, Y):
-#     return rmse(clf.predict(X), Y)
+class Bilinear(Fit):
+    def init_clf(self):
+        # (clf.coef1_, clf.coef2_)
+        return BilinearClf()
 
-# def ols2(X, Y):
-#     return np.linalg.lstsq(X, Y)[0]
+class BilinearClf(object):
+    def fit(self, X, Y, niters=1000):
+        whs = OLS(np.sum(X, 1), Y).fit().clf.coef_
+        for _ in xrange(niters):
+            wht = OLS(X.dot(whs), Y).fit().clf.coef_
+            whs = OLS(wht.dot(X), Y).fit().clf.coef_
+        self.coef1_ = wht
+        self.coef2_ = whs
 
-# def ols(X, Y):
-#     clf = sklearn.linear_model.LinearRegression(fit_intercept=False, normalize=False)
-#     clf.fit(X, Y)
-#     return clf, clf.coef_, None
+    def predict(self, X1):
+        return self.coef1_.dot(X1).dot(self.coef2_)
 
-def bilinear(X, Y, niters=1000):
-    _, whs, _ = ols(np.sum(X, 1), Y)
-    for _ in xrange(niters):
-        _, wht, _ = ols(X.dot(whs), Y)
-        _, whs, _ = ols(wht.dot(X), Y)
-    return wht, whs
-
-# def ridge(X, Y):
-#     # clf = sklearn.linear_model.RidgeCV(alphas=alphas, fit_intercept=False, normalize=False)
-#     clf = sklearn.linear_model.BayesianRidge()
-#     clf.fit(X, Y)
-#     return clf, clf.coef_, (clf.alpha_, clf.lambda_)
-
-# def lasso(X, Y, alphas=[0.1, 1.0, 10.0]):
-#     clf = sklearn.linear_model.LassoCV(alphas=alphas, fit_intercept=False, normalize=False)
-#     clf.fit(X, Y)
-#     return clf, clf.coef_, clf.alpha_
-
-# def ARD(X, Y):
-#     clf = sklearn.linear_model.ARDRegression(fit_intercept=False, normalize=False)
-#     clf.fit(X, Y)
-#     return clf, clf.coef_, (clf.alpha_, clf.lambda_)
-
-def predict(X, w1, w2=None):
-    if w2 is None:
-        if len(w1.shape) == 1 or w1.shape[1] == 1:
-            if X.shape[-1] == w1.shape[0]:
-                return X.dot(w1)
-            elif X.shape[0] == w1.shape[0]:
-                return w1.dot(X)
-        elif (X.shape[-1] == w1.shape[-1]) and (X.shape[-2] == w1.shape[-2]):
-            return np.einsum('abc,bc -> a', X, w1)
-    elif X.shape[-1] == w2.shape[0]:
-        return w1.dot(X).dot(w2)
-    elif X.shape[0] == w2.shape[0]:
-        return w2.dot(X).dot(w1)
-    err = "Bad shapes ({0} x {1}{2}{3}) = no prediction."
-    raise Exception(err.format(X.shape, w1.shape, ' x ' if w2 else '', w2.shape if w2 else ''))
+    def score(self, X1, Y1):
+        resid = lambda a, b: ((a-b)**2).sum()
+        return 1 - resid(Y1, self.predict(X1))/resid(Y1, Y1.mean())
 
 def trainAndTest(X, Y, trainPct=0.9):
     """
