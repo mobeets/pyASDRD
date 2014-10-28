@@ -2,7 +2,7 @@ import scipy.stats
 import numpy as np
 
 class Resp:
-    def __init__(self, S, ssq=12.0, wt=None, ws=None, wf=None, signalType='bilinear'):
+    def __init__(self, S, signalType, ssq=0.0, wt=None, ws=None, wf=None):
         """
         S.X is space-time stimulus on each trial
         S.xy is x,y locations of space as represented in stimulus
@@ -65,7 +65,7 @@ class Resp:
     def resp(self, X, wf, wt, ws, ssq):
         (n, nt, ns) = X.shape
         self.Ysig = self.sig_fcn(X, wf, wt, ws) # signal
-        self.Ynse = np.random.normal(0, np.sqrt(ssq), n) # noise
+        self.Ynse = np.random.normal(0, np.sqrt(ssq), n) if ssq > 0 else 0 # noise
         return self.Ysig + self.Ynse
 
 def randomFullRank(nt, ns):

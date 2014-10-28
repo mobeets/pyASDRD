@@ -122,7 +122,7 @@ def ASD(X, Y, Ds, theta0=None, method='SLSQP'):
     der_hyper, (mu, sigma, Reg, RegInv, sse) = ASDEviGradient(hyper, X, Y, XX, XY, p, q, Ds)
     return mu, Reg, hyper
 
-def ASD_FP(X, Y, Ds, theta0=None, maxiters=10000, step=0.01, tol=1e-6,):
+def ASD_FP(X, Y, Ds, theta0=None, maxiters=10000, step=0.01, tol=1e-6):
     """
     X - (p x q) matrix with inputs in rows
     Y - (p, 1) matrix with measurements

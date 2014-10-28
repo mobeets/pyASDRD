@@ -50,7 +50,7 @@ def XY(S, R):
 def plotFullInner(xy, ws, vmax=None, sz=0.5*1e2):
     vmax = ws.max() if vmax is None else vmax
     ws = ws/vmax if vmax > 0.0 else np.array([0.0]*len(ws))
-    cs = [str(w) for w in 1.0-ws] # [(w, w, w) for w in ws]
+    cs = [str(min(w, 1.0)) for w in 1.0-ws] # [(w, w, w) for w in ws]
     plt.scatter(xy[:,0], xy[:,1], s=sz, c=cs, lw=0)
     # pad
     tm = xy[xy[:,0] == xy[0,0], 1]
@@ -64,11 +64,12 @@ def plotFullInner(xy, ws, vmax=None, sz=0.5*1e2):
     for spine in plt.gca().spines.values():
         spine.set_edgecolor('0.8')
 
-def plotFull(xy, wf):
+def plotFull(xy, wf, vmax=None):
+    vmax = wf.max() if vmax is None else vmax
     nt = wf.shape[0]
     plt.figure(figsize=(8,2), facecolor="white")
     for i in xrange(nt):
         plt.subplot(1, nt, i+1)
-        plotFullInner(xy, wf[i,:], vmax=wf.max())
+        plotFullInner(xy, wf[i,:], vmax=vmax)
         plt.title('t={0}'.format(i))#, rotation='horizontal', horizontalalignment='right')
     plt.show()

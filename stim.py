@@ -51,3 +51,9 @@ def griddedPoints(nw, b=5, hexLike=True):
 
 def sqdist(xy):
     return scipy.spatial.distance.squareform(scipy.spatial.distance.pdist(xy, 'euclidean'))**2
+
+def Dt(nt, ns):
+    xy = np.array(zip(np.arange(nt), np.zeros(nt)))
+    D = sqdist(xy)
+    z = np.zeros([ns, ns])
+    return np.hstack([np.vstack([z+i for i in D[:,j]]) for j in xrange(nt)])
