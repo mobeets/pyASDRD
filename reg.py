@@ -2,40 +2,80 @@ import numpy as np
 import sklearn.cross_validation
 import sklearn.linear_model
 
-rmse = lambda Y, Yh: np.sqrt(np.mean((Yh - Y) ** 2))
-def rmse_clf(clf, X, Y):
-    return rmse(clf.predict(X), Y)
+class Fit(object):
+    def __init__(self, (X0, Y0), (X1, Y1)):
+        self.X0 = X0
+        self.X1 = X1
+        self.Y0 = Y0
+        self.Y1 = Y1
+        self.clf = self.init_clf()
 
-def ols2(X, Y):
-    return np.linalg.lstsq(X, Y)[0]
+    def init_clf(self):
+        raise NotImplementedError("Subclasses should implement this!")
 
-def ols(X, Y):
-    clf = sklearn.linear_model.LinearRegression(fit_intercept=False, normalize=False)
-    clf.fit(X, Y)
-    return clf.coef_
+    def fit(self):
+        self.clf.fit(self.X0, self.Y0)
+
+    def predict(self):
+        self.Yh1 = self.clf.predict(self.X1)
+
+    def score(self):
+        self.rsq = self.clf.score(self.X1, self.Y1)
+
+class OLS(Fit):
+    def init_clf(self):
+        return sklearn.linear_model.LinearRegression(fit_intercept=False, normalize=False)
+
+class Ridge(Fit):
+    def init_clf(self):
+        return sklearn.linear_model.BayesianRidge()
+
+class Lasso(Fit):
+    def __init__(self, *args, **kwargs):
+        self.alphas = kwargs.pop('alpha', [0.1, 1.0, 10.0])
+        super(Lasso, self).__init__(*args, **kwargs)
+
+    def init_clf(self):
+        return sklearn.linear_model.LassoCV(alphas=self.alphas, fit_intercept=False, normalize=False)
+
+class ARD(Fit):
+    def init_clf(self):
+        return sklearn.linear_model.ARDRegression(fit_intercept=False, normalize=False)
+
+# rmse = lambda Y, Yh: np.sqrt(np.mean((Yh - Y) ** 2))
+# def rmse_clf(clf, X, Y):
+#     return rmse(clf.predict(X), Y)
+
+# def ols2(X, Y):
+#     return np.linalg.lstsq(X, Y)[0]
+
+# def ols(X, Y):
+#     clf = sklearn.linear_model.LinearRegression(fit_intercept=False, normalize=False)
+#     clf.fit(X, Y)
+#     return clf, clf.coef_, None
 
 def bilinear(X, Y, niters=1000):
-    whs = ols(np.sum(X, 1), Y)
+    _, whs, _ = ols(np.sum(X, 1), Y)
     for _ in xrange(niters):
-        wht = ols(X.dot(whs), Y)
-        whs = ols(wht.dot(X), Y)
+        _, wht, _ = ols(X.dot(whs), Y)
+        _, whs, _ = ols(wht.dot(X), Y)
     return wht, whs
 
-def ridge(X, Y):
-    # clf = sklearn.linear_model.RidgeCV(alphas=alphas, fit_intercept=False, normalize=False)
-    clf = sklearn.linear_model.BayesianRidge()
-    clf.fit(X, Y)
-    return clf.coef_, (clf.alpha_, clf.lambda_)
+# def ridge(X, Y):
+#     # clf = sklearn.linear_model.RidgeCV(alphas=alphas, fit_intercept=False, normalize=False)
+#     clf = sklearn.linear_model.BayesianRidge()
+#     clf.fit(X, Y)
+#     return clf, clf.coef_, (clf.alpha_, clf.lambda_)
 
-def lasso(X, Y, alphas=[0.1, 1.0, 10.0]):
-    clf = sklearn.linear_model.LassoCV(alphas=alphas, fit_intercept=False, normalize=False)
-    clf.fit(X, Y)
-    return clf.coef_, clf.alpha_
+# def lasso(X, Y, alphas=[0.1, 1.0, 10.0]):
+#     clf = sklearn.linear_model.LassoCV(alphas=alphas, fit_intercept=False, normalize=False)
+#     clf.fit(X, Y)
+#     return clf, clf.coef_, clf.alpha_
 
-def ARD(X, Y):
-    clf = sklearn.linear_model.ARDRegression(fit_intercept=False, normalize=False)
-    clf.fit(X, Y)
-    return clf.coef_, (clf.alpha_, clf.lambda_)
+# def ARD(X, Y):
+#     clf = sklearn.linear_model.ARDRegression(fit_intercept=False, normalize=False)
+#     clf.fit(X, Y)
+#     return clf, clf.coef_, (clf.alpha_, clf.lambda_)
 
 def predict(X, w1, w2=None):
     if w2 is None:

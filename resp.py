@@ -1,6 +1,5 @@
 import scipy.stats
 import numpy as np
-import matplotlib.pyplot as plt
 
 class Resp:
     def __init__(self, S, ssq=12.0, wt=None, ws=None, wf=None, signalType='bilinear'):
@@ -110,34 +109,9 @@ def randomGaussianWeights(xy, a=None, b=None):
     cov = np.std(xy, 0) * b
     return scipy.stats.multivariate_normal.pdf(xy, mu, cov)
 
-def plot(xy, ws, vmax=None, sz=0.5*1e2):
-    vmax = ws.max() if vmax is None else vmax
-    ws = ws/vmax if vmax > 0.0 else np.array([0.0]*len(ws))
-    cs = [str(w) for w in 1.0-ws] # [(w, w, w) for w in ws]
-    plt.scatter(xy[:,0], xy[:,1], s=sz, c=cs, lw=0)
-    # pad
-    tm = xy[xy[:,0] == xy[0,0], 1]
-    dist = np.abs(tm.mean() - tm.min())/2.
-    plt.xlim(xy[:,0].min() - dist, xy[:,0].max() + dist)
-    plt.ylim(xy[:,1].min() - dist, xy[:,1].max() + dist)
-    # format axes
-    plt.gca().set_aspect('equal')
-    plt.gca().get_xaxis().set_visible(False)
-    plt.gca().tick_params(axis='y', labelleft=False, left=False, right=False)
-    for spine in plt.gca().spines.values():
-        spine.set_edgecolor('0.8')
-
-def plotFull(xy, wf):
-    nt = wf.shape[0]
-    plt.figure(figsize=(2,8), facecolor="white")
-    for i in xrange(nt):
-        plt.subplot(nt, 1, i+1)
-        plot(xy, wf[i,:], vmax=wf.max())
-        plt.ylabel('t={0}'.format(i), rotation='horizontal', horizontalalignment='right')
-    plt.show()
-
 if __name__ == '__main__':
     from stim import Stim
+    from plot import plotFull
     s = Stim(100, 7, 25)
     r = Resp(s, signalType='rank-3')
     # plotFull(s.xy, r.wt[:,None].dot(r.ws[None,:]))
