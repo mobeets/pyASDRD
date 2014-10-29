@@ -38,21 +38,23 @@ class Fit(object):
 
 class OLS(Fit):
     def init_clf(self):
-        return sklearn.linear_model.LinearRegression(fit_intercept=True, normalize=True)
+        return sklearn.linear_model.LinearRegression(fit_intercept=False, normalize=False)
 
 class Ridge(Fit):
+    """
+    Ridge regression with priors on tuning parameters
+    """
     def init_clf(self):
         # (clf.alpha_, clf.lambda_)
         return sklearn.linear_model.BayesianRidge()
 
 class Lasso(Fit):
-    def __init__(self, *args, **kwargs):
-        self.alphas = kwargs.pop('alpha', [0.1, 1.0, 10.0])
-        super(Lasso, self).__init__(*args, **kwargs)
-
+    """
+    Lasso model fit with tuning set by cross-validation
+    """
     def init_clf(self):
         # clf.alpha_
-        return sklearn.linear_model.LassoCV(alphas=self.alphas, fit_intercept=False, normalize=False)
+        return sklearn.linear_model.LassoCV(fit_intercept=False, normalize=False)
 
 class ARD(Fit):
     def init_clf(self):
