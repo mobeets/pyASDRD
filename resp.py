@@ -2,17 +2,19 @@ import scipy.stats
 import numpy as np
 
 class Resp:
-    def __init__(self, S, signalType, ssq=0.0, wt=None, ws=None, wf=None):
+    def __init__(self, S, signalType, ssq=0.0, SNR=None, wt=None, ws=None, wf=None):
         """
         S.X is space-time stimulus on each trial
         S.xy is x,y locations of space as represented in stimulus
-        ssq is variance of noise in response
+        ssq is variance of noise in response; ignored if SNR is provided
+        SNR is desired ratio of signal variance to noise variance
         wt, ws, wf are the time, space, or full weights, respectively
         signalType in ['bilinear', 'spacey', 'full', 'rank-k'] where k is int
         
         calculates the weighted response to the given stimulus
         """
-        self.ssq = ssq
+        self.SNR = SNR
+        self.ssq = ssq if self.SNR is not None else None
         (n, nt, ns) = S.X.shape
         self.signalType = signalType
         if self.signalType == 'full':
@@ -51,7 +53,7 @@ class Resp:
             self.sig_fcn = self.full_signal
         self.sig_fcn_lkp = {'bilinear': self.bilinear_signal, 'spacey': self.spacey_signal, 'full': self.full_signal}
         self.sig_fcn = self.sig_fcn_lkp.get(self.signalType, self.full_signal)
-        self.Y = self.resp(S.X, self.wf, self.wt, self.ws, self.ssq)
+        self.Y = self.resp(S.X, self.wf, self.wt, self.ws)
 
     def full_signal(self, X, wf=None, wt=None, ws=None):
         return np.einsum('abc,bc -> a', X, wf)
@@ -62,10 +64,12 @@ class Resp:
     def spacey_signal(self, X, wf=None, wt=None, ws=None):
         return np.sum(X, 1).dot(ws)
 
-    def resp(self, X, wf, wt, ws, ssq):
+    def resp(self, X, wf, wt, ws):
         (n, nt, ns) = X.shape
         self.Ysig = self.sig_fcn(X, wf, wt, ws) # signal
-        self.Ynse = np.random.normal(0, np.sqrt(ssq), n) if ssq > 0 else 0 # noise
+        if self.SNR is not None:
+            self.ssq = np.var(self.Ysig)/self.SNR
+        self.Ynse = np.random.normal(0, np.sqrt(self.ssq), n) if self.ssq > 0 else 0 # noise
         return self.Ysig + self.Ynse
 
 def randomFullRank(nt, ns):
