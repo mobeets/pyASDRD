@@ -15,6 +15,7 @@ class Fit(object):
         self.Y1 = Y1 if Y1 is not None else Y0
         self.label = label if label is not None else ''
         self.clf = self.init_clf()
+        return self
 
     def init_clf(self):
         raise NotImplementedError("clf not implemented!")

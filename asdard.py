@@ -42,7 +42,7 @@ def ASDEviGradient(hyper, X, Y, XX, XY, p, q, Ds):
 
     # update regularizer
     Reg = ASDReg(ro, ds)
-    RegInv = np.linalg.inv(Reg)
+    RegInv = np.linalg.inv(Reg) # this is when you tend to get errors...
     if np.isinf(Reg).all():
         raise Exception("Reg is inf.")
     if np.isnan(RegInv).all():
