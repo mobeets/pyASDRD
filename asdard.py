@@ -1,5 +1,7 @@
 import numpy as np
 import scipy.optimize
+from reg import Fit
+from tools import rinv, woodbury
 
 def confine_to_bounds(theta, bounds):
     ts = []
@@ -10,7 +12,7 @@ def confine_to_bounds(theta, bounds):
     return tuple(ts)
 
 def PostCov2(Reg, XX, sigma_sq):
-    prodGaussCov(Reg, XX, sigma_sq)
+    return woodbury(Reg, XX, sigma_sq)
 
 def PostCov(RegInv, XX, sigma_sq):
     return np.linalg.inv((XX/sigma_sq) + RegInv)
@@ -45,32 +47,36 @@ def ASDEviGradient(hyper, X, Y, XX, XY, p, q, Ds):
 
     # update regularizer
     Reg = ASDReg(ro, ds)
-    RegInv = np.linalg.inv(Reg) # this is when you tend to get errors...
     if np.isinf(Reg).all():
         raise Exception("Reg is inf.")
+    RegInv = np.linalg.inv(Reg) # this is when you tend to get errors...
     if np.isnan(RegInv).all():
         raise Exception("RegInv is nan.")
 
     # posterior cov and mean
     sigma =  PostCov(RegInv, XX, sigma_sq)
-    # sigma =  PostCov2(Reg, XX, sigma_sq)
+    # sigma = PostCov2(Reg, XX, sigma_sq)
     mu = PostMean(sigma, XY, sigma_sq)
     err = Y - X.dot(mu)
     sse = err.dot(err.T)
     
     # hyperparameter derivatives
-    Z = (Reg - sigma - np.outer(mu, mu)).dot(RegInv)
-    v = -p + np.trace(np.eye(q) - sigma.dot(RegInv))
+    # Z = (Reg - sigma - np.outer(mu, mu)).dot(RegInv)
+    # v = -p + np.trace(np.eye(q) - sigma.dot(RegInv))
+    Z = rinv(Reg, Reg - sigma - np.outer(mu, mu))
+    v = -p + np.trace(np.eye(q) - rinv(Reg, sigma))
     der_ro = 0.5*np.trace(Z)
     der_sigma_sq = sse/(sigma_sq**2) + v/sigma_sq
     der_deltas = []
     for (D, d) in ds:
-        der_deltas.append(-0.5*np.trace(Z.dot(Reg * D/(d**3)).dot(RegInv)))
+        # der_deltas.append(-0.5*np.trace(Z.dot(Reg * D/(d**3)).dot(RegInv)))
+        der_deltas.append(-0.5*np.trace(rinv(Reg, Z.dot(Reg * D/(d**3)))))
     der_hyper = (der_ro, der_sigma_sq) + tuple(der_deltas)
 
     if np.isnan(np.array(der_hyper)).any():
         raise Exception("der_hyper is nan: {0}".format(der_hyper))
-    return der_hyper, (mu, sigma, Reg, RegInv, sse)
+    return der_hyper, (mu, sigma, Reg, sse)
+    # return der_hyper, (mu, sigma, Reg, RegInv, sse)
 
 logDet = lambda x: np.linalg.slogdet(x)[1]
 def ASDEvi(X, Y, Reg, sigma, sigma_sq, p, q):
@@ -105,7 +111,8 @@ def ASD(X, Y, Ds, theta0=None, method='SLSQP'):
 
     def objfun_maker(X, Y, XX, XY, p, q, Ds):
         def objfcn(hyper):
-            der_hyper, (mu, sigma, Reg, RegInv, sse) = ASDEviGradient(hyper, X, Y, XX, XY, p, q, Ds)
+            # der_hyper, (mu, sigma, Reg, RegInv, sse) = ASDEviGradient(hyper, X, Y, XX, XY, p, q, Ds)
+            der_hyper, (mu, sigma, Reg, sse) = ASDEviGradient(hyper, X, Y, XX, XY, p, q, Ds)
             sigma_sq = hyper[1]
             evi = ASDEvi(X, Y, Reg, sigma, sigma_sq, p, q)
             # print -evi, hyper, der_hyper
@@ -123,7 +130,8 @@ def ASD(X, Y, Ds, theta0=None, method='SLSQP'):
     if not theta['success']:
         print theta
     hyper = theta['x']
-    der_hyper, (mu, sigma, Reg, RegInv, sse) = ASDEviGradient(hyper, X, Y, XX, XY, p, q, Ds)
+    # der_hyper, (mu, sigma, Reg, RegInv, sse) = ASDEviGradient(hyper, X, Y, XX, XY, p, q, Ds)
+    der_hyper, (mu, sigma, Reg, sse) = ASDEviGradient(hyper, X, Y, XX, XY, p, q, Ds)
     return mu, Reg, hyper
 
 def ASD_FP(X, Y, Ds, theta0=None, maxiters=10000, step=0.01, tol=1e-6):
@@ -162,7 +170,8 @@ def ASD_FP(X, Y, Ds, theta0=None, maxiters=10000, step=0.01, tol=1e-6):
         ro, sigma_sq = hyper[:2]
         deltas = np.array(hyper[2:])
 
-        der_hyper, (mu, sigma, Reg, RegInv, sse) = ASDEviGradient(hyper, X, Y, XX, XY, p, q, Ds)
+        der_hyper, (mu, sigma, Reg, sse) = ASDEviGradient(hyper, X, Y, XX, XY, p, q, Ds)
+        # der_hyper, (mu, sigma, Reg, RegInv, sse) = ASDEviGradient(hyper, X, Y, XX, XY, p, q, Ds)
         der_ro, der_sigma_sq = der_hyper[:2]
         der_deltas = np.array(der_hyper[2:])
         
@@ -181,7 +190,8 @@ def ASD_FP(X, Y, Ds, theta0=None, maxiters=10000, step=0.01, tol=1e-6):
         deltas += step * der_deltas_m
         deltas = np.abs(deltas)
         deltas[deltas < 0.5] = 0.5
-        v = -p + np.trace(np.eye(q) - sigma*RegInv)
+        v = -p + np.trace(np.eye(q) - rinv(Reg, sigma))
+        # v = -p + np.trace(np.eye(q) - sigma*RegInv)
         sigma_sq = -sse/v
 
         hyper_prev = hyper
@@ -190,7 +200,8 @@ def ASD_FP(X, Y, Ds, theta0=None, maxiters=10000, step=0.01, tol=1e-6):
         if (np.abs(np.array(hyper_prev) - np.array(hyper)) < tol).all():
             break
 
-    der_hyper, (mu, sigma, Reg, RegInv, sse) = ASDEviGradient(hyper, X, Y, XX, XY, p, q, Ds)
+    # der_hyper, (mu, sigma, Reg, RegInv, sse) = ASDEviGradient(hyper, X, Y, XX, XY, p, q, Ds)
+    der_hyper, (mu, sigma, Reg, sse) = ASDEviGradient(hyper, X, Y, XX, XY, p, q, Ds)
     return mu, Reg, hyper
 
 def ARD(X, Y, niters=10000, tol=1e-6, alpha_thresh=1e-4):
@@ -253,3 +264,29 @@ def ASDRD(X, Y, RegASD):
     w = R.dot(wp)
     RegInv = R.dot(RegInvP).dot(R.T)
     return w, RegInv
+
+class ASD(Fit):
+    def __init__(self, *args, **kwargs):
+        self.Ds = kwargs.pop('Ds')
+        self.Dt = kwargs.pop('Dt', None)
+        super(ASD, self).__init__(*args, **kwargs)
+
+    def init_clf(self):
+        # (clf.coef_, clf.hyper_, clf.Reg_)
+        return ASDClf(self.Ds, self.Dt)
+
+class ASDClf(object):
+    def __init__(self, Ds, Dt=None):
+        self.Ds = Ds
+        self.Dt = Dt
+        self.D = [self.Ds] if Dt is None else [self.Ds, self.Dt]
+
+    def fit(self, X, Y, maxiters=10000, step=0.01, tol=1e-6):
+        self.coef_, self.Reg_, self.hyper_ = ASD_FP(X, Y, self.D)
+
+    def predict(self, X1):
+        return X1.dot(self.coef_)
+
+    def score(self, X1, Y1):
+        resid = lambda a, b: ((a-b)**2).sum()
+        return 1 - resid(Y1, self.predict(X1))/resid(Y1, Y1.mean())

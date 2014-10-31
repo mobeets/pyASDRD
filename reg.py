@@ -1,7 +1,7 @@
 import numpy as np
 import sklearn.cross_validation
 import sklearn.linear_model
-from asdard import ASD_FP
+# from asdard import ASD_FP
 
 class Fit(object):
     def __init__(self, X0, Y0, X1=None, Y1=None, label=None):
@@ -15,7 +15,7 @@ class Fit(object):
         self.Y1 = Y1 if Y1 is not None else Y0
         self.label = label if label is not None else ''
         self.clf = self.init_clf()
-        return self
+        # return self
 
     def init_clf(self):
         raise NotImplementedError("clf not implemented!")
@@ -79,32 +79,6 @@ class BilinearClf(object):
 
     def predict(self, X1):
         return self.coef1_.dot(X1).dot(self.coef2_)
-
-    def score(self, X1, Y1):
-        resid = lambda a, b: ((a-b)**2).sum()
-        return 1 - resid(Y1, self.predict(X1))/resid(Y1, Y1.mean())
-
-class ASD(Fit):
-    def __init__(self, *args, **kwargs):
-        self.Ds = kwargs.pop('Ds')
-        self.Dt = kwargs.pop('Dt', None)
-        super(ASD, self).__init__(*args, **kwargs)
-
-    def init_clf(self):
-        # (clf.coef_, clf.hyper_, clf.Reg_)
-        return ASDClf(self.Ds, self.Dt)
-
-class ASDClf(object):
-    def __init__(self, Ds, Dt=None):
-        self.Ds = Ds
-        self.Dt = Dt
-        self.D = [self.Ds] if Dt is None else [self.Ds, self.Dt]
-
-    def fit(self, X, Y, maxiters=10000, step=0.01, tol=1e-6):
-        self.coef_, self.Reg_, self.hyper_ = ASD_FP(X, Y, self.D)
-
-    def predict(self, X1):
-        return X1.dot(self.coef_)
 
     def score(self, X1, Y1):
         resid = lambda a, b: ((a-b)**2).sum()
