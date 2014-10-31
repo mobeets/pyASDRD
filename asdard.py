@@ -9,6 +9,9 @@ def confine_to_bounds(theta, bounds):
         ts.append(tc)
     return tuple(ts)
 
+def PostCov2(Reg, XX, sigma_sq):
+    prodGaussCov(Reg, XX, sigma_sq)
+
 def PostCov(RegInv, XX, sigma_sq):
     return np.linalg.inv((XX/sigma_sq) + RegInv)
 
@@ -50,6 +53,7 @@ def ASDEviGradient(hyper, X, Y, XX, XY, p, q, Ds):
 
     # posterior cov and mean
     sigma =  PostCov(RegInv, XX, sigma_sq)
+    # sigma =  PostCov2(Reg, XX, sigma_sq)
     mu = PostMean(sigma, XY, sigma_sq)
     err = Y - X.dot(mu)
     sse = err.dot(err.T)
