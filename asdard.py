@@ -49,13 +49,13 @@ def ASDEviGradient(hyper, X, Y, XX, XY, p, q, Ds):
     Reg = ASDReg(ro, ds)
     if np.isinf(Reg).all():
         raise Exception("Reg is inf.")
-    RegInv = np.linalg.inv(Reg) # this is when you tend to get errors...
-    if np.isnan(RegInv).all():
-        raise Exception("RegInv is nan.")
+    # RegInv = np.linalg.inv(Reg) # this is when you tend to get errors...
+    # if np.isnan(RegInv).all():
+    #     raise Exception("RegInv is nan.")
 
     # posterior cov and mean
-    sigma =  PostCov(RegInv, XX, sigma_sq)
-    # sigma = PostCov2(Reg, XX, sigma_sq)
+    # sigma =  PostCov(RegInv, XX, sigma_sq)
+    sigma = PostCov2(Reg, X.T, sigma_sq)
     mu = PostMean(sigma, XY, sigma_sq)
     err = Y - X.dot(mu)
     sse = err.dot(err.T)
