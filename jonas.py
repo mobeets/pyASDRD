@@ -47,20 +47,27 @@ def main(infile, N=200, M=50, doPlot=False):
     xy = np.array(zip(np.arange(nt), np.zeros(nt))) # distances between lags in time is just 1s
     D = stim.sqdist(xy) # distance matrix
 
+    # Ridge
+    obj = reg.Ridge(X0, Y0, X1, Y1, label='Ridge').fit().score()
+    wf0 = obj.clf.coef_
+    print wf0
+
     # ARD
     obj = reg.ARD(X0, Y0, X1, Y1, label='ARD').fit().score()
-    wf = obj.clf.coef_
-    print wf
-    if doPlot:
-        plt.plot(wf, 'o')
-        plt.show()
+    wf1 = obj.clf.coef_
+    print wf1
 
     # ASD
     obj = asdard.ASD(X0, Y0, X1, Y1, Ds=D, label='ASD').fit().score()
-    wf = obj.clf.coef_
-    print wf
+    wf2 = obj.clf.coef_
+    print wf2
+
     if doPlot:
-        plt.plot(wf, 'o')
+        ms = 5
+        plt.plot(wf0, 'bo', markersize=ms, label='Ridge')
+        plt.plot(wf1, 'co', markersize=ms, label='ARD')
+        plt.plot(wf2, 'go', markersize=ms, label='ASD')
+        plt.legend()
         plt.show()
 
 if __name__ == '__main__':
@@ -70,7 +77,7 @@ if __name__ == '__main__':
     parser.add_argument("--plot", action='store_true', default=False)
     parser.add_argument("--fmt", type=str, choices=['h5', 'npy'], default=None)
     parser.add_argument("-m", type=int, default=50, help="# of trials to use")
-    parser.add_argument("-n", type=int, default=50, help="# of frame lags to use")
+    parser.add_argument("-n", type=int, default=200, help="# of frame lags to use")
     args = parser.parse_args()
     if args.convert:
         write(args.infile, args.fmt)
