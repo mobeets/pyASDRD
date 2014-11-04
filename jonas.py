@@ -63,10 +63,9 @@ def main(infile, N=200, M=50, doPlot=False):
     print wf2
 
     if doPlot:
-        ms = 5
-        plt.plot(wf0, 'bo', markersize=ms, label='Ridge')
-        plt.plot(wf1, 'co', markersize=ms, label='ARD')
-        plt.plot(wf2, 'go', markersize=ms, label='ASD')
+        plt.plot(wf0, 'bo', label='Ridge')
+        plt.plot(wf1, 'co', label='ARD')
+        plt.plot(wf2, 'go', label='ASD')
         plt.legend()
         plt.show()
 
