@@ -1,7 +1,6 @@
 import numpy as np
 import sklearn.cross_validation
 import sklearn.linear_model
-# from asdard import ASD_FP
 
 class Fit(object):
     def __init__(self, X0, Y0, X1=None, Y1=None, label=None):
@@ -28,8 +27,26 @@ class Fit(object):
         self.Yh1 = self.clf.predict(self.X1)
         return self
 
+    def score_aic(self, k):
+        """
+        k is int - # of free parameters
+        returns the AIC of model fit to training data
+        assuming a Gaussian likelihood
+            i.e., assumes errors are normally distributed
+        """
+        assert 2*np.sqrt(len(self.Y0)) > k
+        raise NotImplementedError()
+        resid = lambda a, b: ((a-b)**2).sum()
+        rss = resid(self.Y0, self.clf.predict(self.X0))
+        return len(self.Y0)*np.log(rss/len(self.Y0)) + 2*k
+
     def score(self, verbose=True):
+        """
+        calculates the r-squared of model fit to test data
+            i.e., 1 - rss/mss
+        """
         self.rsq = self.clf.score(self.X1, self.Y1)
+        # self.aic = self.score_aic(1)
         if verbose:
             self.print_score()
         return self
@@ -81,8 +98,9 @@ class BilinearClf(object):
         return self.coef1_.dot(X1).dot(self.coef2_)
 
     def score(self, X1, Y1):
-        resid = lambda a, b: ((a-b)**2).sum()
-        return 1 - resid(Y1, self.predict(X1))/resid(Y1, Y1.mean())
+        return sklearn.metrics.r2_score(Y1, self.predict(X1))
+        # resid = lambda a, b: ((a-b)**2).sum()
+        # return 1 - resid(Y1, self.predict(X1))/resid(Y1, Y1.mean())
 
 def trainAndTest(X, Y, trainPct=0.9):
     """

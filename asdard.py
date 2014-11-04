@@ -1,6 +1,7 @@
 import numpy as np
 import scipy.optimize
-from reg import Fit
+import sklearn.metrics
+from reg import Fit, ARD
 from tools import rinv, woodbury
 
 def confine_to_bounds(theta, bounds):
@@ -90,7 +91,7 @@ def ASDEvi(X, Y, Reg, sigma, sigma_sq, p, q):
     B = (np.eye(p)/sigma_sq) - (X.dot(sigma).dot(X.T))/(sigma_sq**2)
     return 0.5*(logZ - Y.T.dot(B).dot(Y))
 
-def ASD(X, Y, Ds, theta0=None, method='SLSQP'):
+def ASD_OG(X, Y, Ds, theta0=None, method='SLSQP'):
     """
     X - (p x q) matrix with inputs in rows
     Y - (p, 1) matrix with measurements
@@ -204,7 +205,7 @@ def ASD_FP(X, Y, Ds, theta0=None, maxiters=10000, step=0.01, tol=1e-6):
     der_hyper, (mu, sigma, Reg, sse) = ASDEviGradient(hyper, X, Y, XX, XY, p, q, Ds)
     return mu, Reg, hyper
 
-def ARD(X, Y, niters=10000, tol=1e-6, alpha_thresh=1e-4):
+def ARD2(X, Y, niters=10000, tol=1e-6, alpha_thresh=1e-4):
     """
     X - (p x q) matrix with inputs in rows
     Y - (p, 1) matrix with measurements
@@ -228,7 +229,7 @@ def ARD(X, Y, niters=10000, tol=1e-6, alpha_thresh=1e-4):
     keep_alpha = np.ones(q, dtype=bool)
 
     for i in xrange(niters):
-        RegInv = np.diag(alpha)
+        RegInv = np.diagflat(alpha)
         sigma = PostCov(RegInv, XX, sigma_sq)
         mu = PostMean(sigma, XY, sigma_sq)
         sse = np.power(Y - X.dot(mu), 2).sum()
@@ -246,7 +247,7 @@ def ARD(X, Y, niters=10000, tol=1e-6, alpha_thresh=1e-4):
     mu = PostMean(sigma, XY, sigma_sq)
     return mu, RegInv, (alpha, sigma_sq)
     
-def ASDRD(X, Y, RegASD):
+def ASDRD_inner(X, Y, RegASD):
     """
     X - (p x q) matrix with inputs in rows
     Y - (p, 1) matrix with measurements
@@ -259,9 +260,18 @@ def ASDRD(X, Y, RegASD):
         Advances in Neural Information Processing Systems, vol. 15, pp. 301-308, Cambridge, MA, 2003
     """
     D, V = np.linalg.eigh(RegASD) # RegASD = V * D * V^T
-    R = V.dot(np.diag(np.sqrt(D))).dot(V.T) # R = RegASD^(1/2)
-    wp, RegInvP, _ = ARD(X.dot(R), Y)
-    w = R.dot(wp)
+    if (np.abs(D[D<0]) < 1e-7).all():
+        D[D<0] = 0
+    else:
+        raise ValueError("ASD reg has some large-ish negative eigenvalues")
+    R = V.dot(np.diag(np.sqrt(D))).dot(V.T) # R = V * sqrt(D) * V^T
+    # wp, RegInvP, _ = ARD(X.dot(R), Y)
+    obj = ARD(X.dot(R), Y).fit()
+    w = R.dot(obj.clf.coef_)
+    RegInvP = np.diagflat(obj.clf.alpha_)
+    # RegInvP = obj.clf.sigma_ # this may be wrong--might want np.diag(obj.clf.alpha_)
+    # msk = obj.clf.lambda_ > obj.clf.threshold_lambda
+    # R = R[~msk,:][:,~msk]
     RegInv = R.dot(RegInvP).dot(R.T)
     return w, RegInv
 
@@ -281,12 +291,37 @@ class ASDClf(object):
         self.Dt = Dt
         self.D = [self.Ds] if Dt is None else [self.Ds, self.Dt]
 
-    def fit(self, X, Y, maxiters=10000, step=0.01, tol=1e-6):
-        self.coef_, self.Reg_, self.hyper_ = ASD_FP(X, Y, self.D)
+    def fit(self, X, Y, theta0=None, maxiters=10000, step=0.01, tol=1e-6):
+        self.coef_, self.Reg_, self.hyper_ = ASD_FP(X, Y, self.D,
+            theta0=theta0, maxiters=maxiters, step=step, tol=tol)
 
     def predict(self, X1):
         return X1.dot(self.coef_)
 
     def score(self, X1, Y1):
-        resid = lambda a, b: ((a-b)**2).sum()
-        return 1 - resid(Y1, self.predict(X1))/resid(Y1, Y1.mean())
+        return sklearn.metrics.r2_score(Y1, self.predict(X1))
+
+class ASDRD(ASD):
+    def __init__(self, *args, **kwargs):
+        self.asdobj = kwargs.pop('asdobj', None)
+        super(ASDRD, self).__init__(*args, **kwargs)
+
+    def init_clf(self):
+        return ASDRDClf(self.Ds, self.Dt, self.asdobj)
+
+class ASDRDClf(ASDClf):
+    def __init__(self, Ds, Dt=None, asdobj=None):
+        self.Ds = Ds
+        self.Dt = Dt
+        self.D = [self.Ds] if Dt is None else [self.Ds, self.Dt]
+        self.asdobj = asdobj
+
+    def fit(self, X, Y, theta0=None, maxiters=10000, step=0.01, tol=1e-6):
+        if self.asdobj is None:
+            self.asd_coef_, self.asd_Reg_, self.asd_hyper_ = ASD_FP(X, Y, self.D,
+            theta0=theta0, maxiters=maxiters, step=step, tol=tol)
+        else:
+            # self.asd_coef = self.asdobj.clf.coef_
+            self.asd_Reg_ = self.asdobj.clf.Reg_
+            # self.asd_hyper_ = self.asdobj.clf.hyper_
+        self.coef_, self.invReg_ = ASDRD_inner(X, Y, self.asd_Reg_)
