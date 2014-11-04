@@ -21,11 +21,7 @@ def write(infile, fmt):
         xs = np.loadtxt(open(infile, "rb"), delimiter=",", skiprows=0)
         np.save(outfile, xs)
 
-def load(infile, N, M):
-    """
-    N is int - number of trials
-    M is int - number of lags
-    """
+def load(infile,):
     fmt = os.path.splitext(infile)[-1].lower()
     if fmt == '.csv':
         xs = np.loadtxt(open(infile, "rb"), delimiter=",", skiprows=0)
@@ -34,39 +30,50 @@ def load(infile, N, M):
         xs = pd.read_hdf(infile, 'table').values # assumes table named df
     elif fmt == '.npy':
         xs = np.load(infile)
-    X = xs[:N, -(M+2):-2]
-    Y = xs[:N, -1]
-    ONES = xs[:N, -2]
+    return xs
+
+def split(xs, N, M, front=True):
+    """
+    N is int - number of trials
+    M is int - number of lags
+    """
+    if front:
+        X = xs[:N, -(M+2):-2]
+        Y = xs[:N, -1]
+        # ONES = xs[:N, -2]
+    else:
+        X = xs[-(N+1):, -(M+2):-2]
+        Y = xs[-(N+1):, -1]
+        # ONES = xs[-(N+1):, -2]
     return X, Y
 
+fitfcns = {'ridge': reg.Ridge, 'ard': reg.ARD}
 def main(infile, N=200, M=50, doPlot=False):
-    X, Y = load(infile, N, M)
-    (X0, Y0), (X1, Y1) = reg.trainAndTest(X, Y, trainPct=0.8)
+    xs = load(infile)
+    # X, Y = split(xs, N, M)
+    # (X0, Y0), (X1, Y1) = reg.trainAndTest(X, Y, trainPct=0.8)
+    
+    X0, Y0 = split(xs, N, M, front=True)
+    X1, Y1 = split(xs, N, M, front=False)
 
     nt = X0.shape[1]
     xy = np.array(zip(np.arange(nt), np.zeros(nt))) # distances between lags in time is just 1s
     D = stim.sqdist(xy) # distance matrix
 
-    # Ridge
-    obj = reg.Ridge(X0, Y0, X1, Y1, label='Ridge').fit().score()
-    wf0 = obj.clf.coef_
-    print wf0
-
-    # ARD
-    obj = reg.ARD(X0, Y0, X1, Y1, label='ARD').fit().score()
-    wf1 = obj.clf.coef_
-    print wf1
-
-    # ASD
-    obj = asdard.ASD(X0, Y0, X1, Y1, Ds=D, label='ASD').fit().score()
-    wf2 = obj.clf.coef_
-    print wf2
+    wfs = {}
+    fits = ['ridge', 'ard']
+    for fit in fits:
+        if fit == 'asd':
+            obj = fitfcns[fit](X0, Y0, X1, Y1, Ds=D, label=fit.upper()).fit().score()
+        else:
+            obj = fitfcns[fit](X0, Y0, X1, Y1, label=fit.upper()).fit().score()
+        wfs[fit] = obj.clf.coef_
 
     if doPlot:
-        plt.plot(wf0, 'bo', label='Ridge')
-        plt.plot(wf1, 'co', label='ARD')
-        plt.plot(wf2, 'go', label='ASD')
-        plt.legend()
+        for fit, wf in wfs.iteritems():
+            plt.plot(wf, 'o', label=fit)
+        plt.plot(plt.xlim(), [0, 0], '--', color='gray')
+        plt.legend(loc='lower left')
         plt.show()
 
 if __name__ == '__main__':
