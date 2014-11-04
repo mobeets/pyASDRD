@@ -47,8 +47,8 @@ def split(xs, N, M, front=True):
         # ONES = xs[-(N+1):, -2]
     return X, Y
 
-fitfcns = {'ridge': reg.Ridge, 'ard': reg.ARD}
-def main(infile, N=200, M=50, doPlot=False):
+fitfcns = {'ridge': reg.Ridge, 'ard': reg.ARD, 'asd': asdard.ASD}
+def main(infile, fits, N=200, M=50, doPlot=False):
     xs = load(infile)
     # X, Y = split(xs, N, M)
     # (X0, Y0), (X1, Y1) = reg.trainAndTest(X, Y, trainPct=0.8)
@@ -61,8 +61,8 @@ def main(infile, N=200, M=50, doPlot=False):
     D = stim.sqdist(xy) # distance matrix
 
     wfs = {}
-    fits = ['ridge', 'ard']
     for fit in fits:
+        print 'Fitting {0}'.format(fit.upper())
         if fit == 'asd':
             obj = fitfcns[fit](X0, Y0, X1, Y1, Ds=D, label=fit.upper()).fit().score()
         else:
@@ -77,15 +77,17 @@ def main(infile, N=200, M=50, doPlot=False):
         plt.show()
 
 if __name__ == '__main__':
+    ALL_FITS = fitfcns.keys()
     parser = argparse.ArgumentParser()
     parser.add_argument('-i', "--infile", type=str, default=None)
     parser.add_argument("--convert", action='store_true', default=False)
     parser.add_argument("--plot", action='store_true', default=False)
     parser.add_argument("--fmt", type=str, choices=['h5', 'npy'], default=None)
+    parser.add_argument("--fits", default=ALL_FITS, nargs='*', choices=ALL_FITS, type=str, help="The fitting methods you would like to use, from: {0}".format(ALL_FITS))
     parser.add_argument("-m", type=int, default=50, help="# of trials to use")
     parser.add_argument("-n", type=int, default=200, help="# of frame lags to use")
     args = parser.parse_args()
     if args.convert:
         write(args.infile, args.fmt)
     else:
-        main(args.infile, args.n, args.m, args.plot)
+        main(args.infile, args.fits, args.n, args.m, args.plot)
