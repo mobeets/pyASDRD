@@ -19,8 +19,8 @@ class Fit(object):
     def init_clf(self):
         raise NotImplementedError("clf not implemented!")
 
-    def fit(self):
-        self.clf.fit(self.X0, self.Y0)
+    def fit(self, **kwargs):
+        self.clf.fit(self.X0, self.Y0, **kwargs)
         return self
 
     def predict(self):
@@ -64,7 +64,7 @@ class Ridge(Fit):
     """
     def init_clf(self):
         # (clf.alpha_, clf.lambda_)
-        return sklearn.linear_model.BayesianRidge()
+        return sklearn.linear_model.BayesianRidge(fit_intercept=False)
 
 class Lasso(Fit):
     """

@@ -135,7 +135,7 @@ def ASD_OG(X, Y, Ds, theta0=None, method='SLSQP'):
     der_hyper, (mu, sigma, Reg, sse) = ASDEviGradient(hyper, X, Y, XX, XY, p, q, Ds)
     return mu, Reg, hyper
 
-def ASD_FP(X, Y, Ds, theta0=None, maxiters=10000, step=0.01, tol=1e-6):
+def ASD_FP(X, Y, Ds, theta0=None, maxiters=10000, step=0.01, tol=1e-5):
     """
     X - (p x q) matrix with inputs in rows
     Y - (p, 1) matrix with measurements
@@ -153,7 +153,8 @@ def ASD_FP(X, Y, Ds, theta0=None, maxiters=10000, step=0.01, tol=1e-6):
     """
     if theta0 is None:
         theta0 = (-1.0, 0.1) + (2.0,)*len(Ds)
-    theta_bounds = [(-20.0, 20.0), (None, None)] + [(0.5, None)]*len(Ds)
+    theta_bounds = [(-20.0, 20.0), (None, None)] + [(10e-6, 10e6)]*len(Ds)
+    # theta_bounds = [(-20.0, 20.0), (None, None)] + [(0.5, 10e6)]*len(Ds)
 
     p, q = X.shape
     XY = X.T.dot(Y)
@@ -172,7 +173,6 @@ def ASD_FP(X, Y, Ds, theta0=None, maxiters=10000, step=0.01, tol=1e-6):
         deltas = np.array(hyper[2:])
 
         der_hyper, (mu, sigma, Reg, sse) = ASDEviGradient(hyper, X, Y, XX, XY, p, q, Ds)
-        # der_hyper, (mu, sigma, Reg, RegInv, sse) = ASDEviGradient(hyper, X, Y, XX, XY, p, q, Ds)
         der_ro, der_sigma_sq = der_hyper[:2]
         der_deltas = np.array(der_hyper[2:])
         
@@ -189,19 +189,20 @@ def ASD_FP(X, Y, Ds, theta0=None, maxiters=10000, step=0.01, tol=1e-6):
 
         ro += step * der_ro_m
         deltas += step * der_deltas_m
-        deltas = np.abs(deltas)
-        deltas[deltas < 0.5] = 0.5
+        # deltas = np.abs(deltas)
+        # deltas[deltas < 0.5] = 0.5
         v = -p + np.trace(np.eye(q) - rinv(Reg, sigma))
-        # v = -p + np.trace(np.eye(q) - sigma*RegInv)
         sigma_sq = -sse/v
 
         hyper_prev = hyper
         hyper = (ro, sigma_sq) + tuple(deltas)
         hyper = confine_to_bounds(hyper, theta_bounds)
+        if i % 5 == 0:
+            print i, np.array(hyper)
+            print i, np.array(hyper_prev) - np.array(hyper)
         if (np.abs(np.array(hyper_prev) - np.array(hyper)) < tol).all():
             break
 
-    # der_hyper, (mu, sigma, Reg, RegInv, sse) = ASDEviGradient(hyper, X, Y, XX, XY, p, q, Ds)
     der_hyper, (mu, sigma, Reg, sse) = ASDEviGradient(hyper, X, Y, XX, XY, p, q, Ds)
     return mu, Reg, hyper
 
