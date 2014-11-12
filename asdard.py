@@ -12,8 +12,8 @@ def confine_to_bounds(theta, bounds):
         ts.append(tc)
     return tuple(ts)
 
-def PostCov2(Reg, XX, sigma_sq):
-    return woodbury(Reg, XX, sigma_sq)
+def PostCov2(Reg, XT, sigma_sq):
+    return woodbury(Reg, XT, sigma_sq)
 
 def PostCov(RegInv, XX, sigma_sq):
     return np.linalg.inv((XX/sigma_sq) + RegInv)
@@ -50,34 +50,44 @@ def ASDEviGradient(hyper, X, Y, XX, XY, p, q, Ds):
     Reg = ASDReg(ro, ds)
     if np.isinf(Reg).all():
         raise Exception("Reg is inf.")
-    # RegInv = np.linalg.inv(Reg) # this is when you tend to get errors...
-    # if np.isnan(RegInv).all():
-    #     raise Exception("RegInv is nan.")
+
+    # if regularizer is close to singular, use svd
+    isSingular = False
+    if np.linalg.cond(Reg) > 1e10:
+        # print 'SVD...'
+        isSingular = True
+        U, s, Vh = scipy.linalg.svd(Reg, full_matrices=False)
+        inds = s/s.sum() > 1e-18
+        B = U[:,inds]
+        Reg = B.T.dot(Reg).dot(B)
+        X = X.dot(B)
+        XY = X.dot(B).T.dot(Y)
 
     # posterior cov and mean
-    # sigma =  PostCov(RegInv, XX, sigma_sq)
-    sigma = PostCov2(Reg, X.T, sigma_sq)
+    sigma = PostCov(np.linalg.inv(Reg), XX, sigma_sq)
+    # sigma = PostCov2(Reg, X.T, sigma_sq)
     mu = PostMean(sigma, XY, sigma_sq)
+    if isSingular:
+        X = X.dot(B.T)
+        Reg = B.dot(Reg).dot(B.T)
+        mu = B.dot(mu)
+        sigma = B.dot(sigma).dot(B.T)
     err = Y - X.dot(mu)
     sse = err.dot(err.T)
     
     # hyperparameter derivatives
-    # Z = (Reg - sigma - np.outer(mu, mu)).dot(RegInv)
-    # v = -p + np.trace(np.eye(q) - sigma.dot(RegInv))
     Z = rinv(Reg, Reg - sigma - np.outer(mu, mu))
     v = -p + np.trace(np.eye(q) - rinv(Reg, sigma))
     der_ro = 0.5*np.trace(Z)
     der_sigma_sq = sse/(sigma_sq**2) + v/sigma_sq
     der_deltas = []
     for (D, d) in ds:
-        # der_deltas.append(-0.5*np.trace(Z.dot(Reg * D/(d**3)).dot(RegInv)))
         der_deltas.append(-0.5*np.trace(rinv(Reg, Z.dot(Reg * D/(d**3)))))
     der_hyper = (der_ro, der_sigma_sq) + tuple(der_deltas)
 
     if np.isnan(np.array(der_hyper)).any():
         raise Exception("der_hyper is nan: {0}".format(der_hyper))
     return der_hyper, (mu, sigma, Reg, sse)
-    # return der_hyper, (mu, sigma, Reg, RegInv, sse)
 
 logDet = lambda x: np.linalg.slogdet(x)[1]
 def ASDEvi(X, Y, Reg, sigma, sigma_sq, p, q):
@@ -197,9 +207,9 @@ def ASD_FP(X, Y, Ds, theta0=None, maxiters=10000, step=0.01, tol=1e-5):
         hyper_prev = hyper
         hyper = (ro, sigma_sq) + tuple(deltas)
         hyper = confine_to_bounds(hyper, theta_bounds)
-        if i % 5 == 0:
-            print i, np.array(hyper)
-            print i, np.array(hyper_prev) - np.array(hyper)
+        # if i % 5 == 0:
+        #     print i, np.array(hyper)
+        #     print i, np.array(hyper_prev) - np.array(hyper)
         if (np.abs(np.array(hyper_prev) - np.array(hyper)) < tol).all():
             break
 

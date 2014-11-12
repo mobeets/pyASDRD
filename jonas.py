@@ -122,27 +122,16 @@ def main(infile, fits, p=0.8, N=200, M=50, skipM=0, thresh=None, doPlot=False, l
             obj = fitfcns[fit](X0, Y0, X1, Y1, label=fit.upper()).fit().score()
         wfs[fit] = obj.clf.coef_
 
-        # if doPlot:
-        #     obj.predict()
-        #     plt.plot(obj.Y1, 'k', alpha=0.5)
-        #     plt.plot(obj.Yh1, 'r', alpha=0.5)
-        #     plt.show()
-
     if doPlot:
         for fit, wf in wfs.iteritems():
             lbl = fit if label is None else label
             lw = 3
             alpha = 0.7
             if skipM:
-                ms = np.arange(len(wf))*skipMq
-                plt.plot(ms, wf, '-', label=lbl, lw=lw, alpha=alpha, color=color)
+                ms = np.arange(len(wf))*skipM
+                plt.plot(ms, wf, '-', label=lbl, lw=lw, alpha=alpha)
             else:
-                plt.plot(wf, '-', label=lbl, lw=lw, alpha=alpha, color=color)
-            # plt.plot(wf[2:-5], '-', label=fit, lw=3, alpha=0.7)
-        # plt.plot(plt.xlim(), [0, 0], '--', color='gray')
-        # plt.legend(loc='upper right')
-        # plt.gcf().patch.set_facecolor('white')
-        # plt.show()
+                plt.plot(wf, '-', label=lbl, lw=lw, alpha=alpha)
 
 if __name__ == '__main__':
     ALL_FITS = fitfcns.keys()
@@ -153,27 +142,26 @@ if __name__ == '__main__':
     parser.add_argument("--plot", action='store_true', default=False)
     parser.add_argument("--fmt", type=str, choices=['h5', 'npy'], default=None)
     parser.add_argument("--fits", default=ALL_FITS, nargs='*', choices=ALL_FITS, type=str, help="The fitting methods you would like to use, from: {0}".format(ALL_FITS))
-    parser.add_argument("-m", type=int, default=50, help="# of trials to use")
+    parser.add_argument("-m", type=int, default=50, help="# of frame lags to use")
     parser.add_argument("--skipm", type=int, default=0, help="# of lags to skip")
-    parser.add_argument("-n", type=int, default=200, help="# of frame lags to use")
-    parser.add_argument("-p", type=float, default=0.8, help="%% of trials to use for training data")
+    parser.add_argument("-n", type=int, default=200, help="# of trials to use")
+    parser.add_argument("-p", type=float, default=0.1, help="%% of trials to use for training data")
     parser.add_argument("--thresh", type=float, default=None, help="eye position diff threshold")
     args = parser.parse_args()
     if args.convert:
         write(args.infile, args.fmt)
     else:
         cmap = matplotlib.cm.get_cmap('Reds')
-        main(args.infile, args.fits, args.p, args.n, args.m, args.skipm, args.thresh, args.plot, 'startX', flip=True, color=cmap(0.7))
-        # main(args.infile, args.fits, args.p, args.n, args.m, args.thresh, args.plot, 'endX', color=cmap(0.1))
+        main(args.infile, args.fits, args.p, args.n, args.m, args.skipm, args.thresh, args.plot)
         if args.infile2:
             cmap = matplotlib.cm.get_cmap('Blues')
             main(args.infile2, args.fits, args.p, args.n, args.m, args.skipm, args.thresh, args.plot, 'startY', color=cmap(0.7))
-            # main(args.infile2, args.fits, args.p, args.n, args.m, args.thresh, args.plot, 'endY', flip=True, color=cmap(0.1))
 
-        plt.plot(plt.xlim(), [0, 0], '--', color='gray')
-        plt.xlabel('foe lag')
-        plt.ylabel('weight')
-        # plt.ylim(-0.02, 0.04)
-        plt.legend(loc='upper right')
-        plt.gcf().patch.set_facecolor('white')
-        plt.show()
+        if args.plot:
+            plt.plot(plt.xlim(), [0, 0], '--', color='gray')
+            plt.xlabel('foe lag')
+            plt.ylabel('weight')
+            # plt.ylim(-0.02, 0.04)
+            plt.legend(loc='upper right')
+            plt.gcf().patch.set_facecolor('white')
+            plt.show()
