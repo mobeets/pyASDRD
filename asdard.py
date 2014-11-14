@@ -61,7 +61,8 @@ def ASDEviGradient(hyper, X, Y, XX, XY, p, q, Ds):
         B = U[:,inds]
         Reg = B.T.dot(Reg).dot(B)
         X = X.dot(B)
-        XY = X.dot(B).T.dot(Y)
+        XY = X.T.dot(Y)
+        XX = X.T.dot(X)
 
     # posterior cov and mean
     sigma = PostCov(np.linalg.inv(Reg), XX, sigma_sq)
@@ -207,7 +208,10 @@ def ASD_FP(X, Y, Ds, theta0=None, maxiters=10000, step=0.01, tol=1e-5):
         hyper_prev = hyper
         hyper = (ro, sigma_sq) + tuple(deltas)
         hyper = confine_to_bounds(hyper, theta_bounds)
-        # if i % 5 == 0:
+        if i % 5 == 0:
+            print '.',
+        if i % 20 == 0 and i > 0:
+            print
         #     print i, np.array(hyper)
         #     print i, np.array(hyper_prev) - np.array(hyper)
         if (np.abs(np.array(hyper_prev) - np.array(hyper)) < tol).all():
@@ -275,11 +279,17 @@ def ASDRD_inner(X, Y, RegASD):
         D[D<0] = 0
     else:
         raise ValueError("ASD reg has some large-ish negative eigenvalues")
+    print "eigenvalue decomposition complete"
     R = V.dot(np.diag(np.sqrt(D))).dot(V.T) # R = V * sqrt(D) * V^T
     # wp, RegInvP, _ = ARD(X.dot(R), Y)
+    print "next"
+    # 1/0
     obj = ARD(X.dot(R), Y).fit()
+    print "ARD complete"
     w = R.dot(obj.clf.coef_)
+    print "next"
     RegInvP = np.diagflat(obj.clf.alpha_)
+    print "finally..."
     # RegInvP = obj.clf.sigma_ # this may be wrong--might want np.diag(obj.clf.alpha_)
     # msk = obj.clf.lambda_ > obj.clf.threshold_lambda
     # R = R[~msk,:][:,~msk]
@@ -314,25 +324,22 @@ class ASDClf(object):
 
 class ASDRD(ASD):
     def __init__(self, *args, **kwargs):
-        self.asdobj = kwargs.pop('asdobj', None)
+        self.asdreg = kwargs.pop('asdreg', None)
         super(ASDRD, self).__init__(*args, **kwargs)
 
     def init_clf(self):
-        return ASDRDClf(self.Ds, self.Dt, self.asdobj)
+        return ASDRDClf(self.Ds, self.Dt, self.asdreg)
 
 class ASDRDClf(ASDClf):
-    def __init__(self, Ds, Dt=None, asdobj=None):
+    def __init__(self, Ds, Dt=None, asdreg=None):
         self.Ds = Ds
         self.Dt = Dt
         self.D = [self.Ds] if Dt is None else [self.Ds, self.Dt]
-        self.asdobj = asdobj
+        self.asdreg = asdreg
 
     def fit(self, X, Y, theta0=None, maxiters=10000, step=0.01, tol=1e-6):
-        if self.asdobj is None:
-            self.asd_coef_, self.asd_Reg_, self.asd_hyper_ = ASD_FP(X, Y, self.D,
+        if self.asdreg is None:
+            self.asd_coef_, self.asdreg, self.asd_hyper_ = ASD_FP(X, Y, self.D,
             theta0=theta0, maxiters=maxiters, step=step, tol=tol)
-        else:
-            # self.asd_coef = self.asdobj.clf.coef_
-            self.asd_Reg_ = self.asdobj.clf.Reg_
-            # self.asd_hyper_ = self.asdobj.clf.hyper_
-        self.coef_, self.invReg_ = ASDRD_inner(X, Y, self.asd_Reg_)
+            print "ASD complete"
+        self.coef_, self.invReg_ = ASDRD_inner(X, Y, self.asdreg)

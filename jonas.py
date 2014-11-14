@@ -13,6 +13,13 @@ import resp
 import plot
 import asdard
 
+"""
+* L1 regularization (e.g., lasso), L2 reg (e.g., ridge)
+* L1-norm regularization => "sparse"
+* L1-norm regularization better for logistic regression when there are more irrelevant features than training examples
+    - see Ng, 2004
+"""
+
 def write(infile, fmt):
     assert infile.endswith('.csv')
     outfile = '{0}.{1}'.format(os.path.splitext(infile)[0], fmt)
@@ -81,7 +88,7 @@ def split(X, Y, N, M, skipM=5, front=True):
         Y = Y[-(N+1):]
     return X, Y
 
-fitfcns = {'ols': reg.OLS, 'ridge': reg.Ridge, 'ard': reg.ARD, 'asd': asdard.ASD, 'lasso': reg.Lasso}
+fitfcns = {'ols': reg.OLS, 'ridge': reg.Ridge, 'ard': reg.ARD, 'asd': asdard.ASD, 'asdrd': asdard.ASDRD, 'lasso': reg.Lasso}
 def main(infile, fits, p=0.8, N=200, M=50, skipM=0, thresh=None, doPlot=False, label=None, flip=False, color=None):
     """
     to initialize for ASD:
@@ -100,24 +107,36 @@ def main(infile, fits, p=0.8, N=200, M=50, skipM=0, thresh=None, doPlot=False, l
     # return
     # 1/0
 
-    N = int(p*X.shape[0])
+    if p > 0.0:
+        N = int(p*X.shape[0])
+    if p == 0.0 and N == 0:
+        N = X.shape[0]
+    if M == 0:
+        M = X.shape[1]
     X0, Y0 = split(X, Y, N, M, skipM, front=flip)
     X1, Y1 = split(X, Y, X.shape[0] - N, M, skipM, front=not flip)
     print X0.shape
 
-    if 'asd' in fits:
+    if 'asd' in fits or 'asdrd' in fits:
         nt = X0.shape[1]
         xy = np.array(zip(np.arange(nt), np.zeros(nt))) # distances between lags in time is just 1s
         D = stim.sqdist(xy) # distance matrix
 
     wfs = {}
-    for fit in fits:
+    asdreg = None
+    theta0 = None
+    for fit in sorted(fits):
         print 'Fitting {0}'.format(fit.upper())
         if fit == 'asd':
             rdg = fitfcns['ridge'](X0, Y0, X1, Y1, label=fit.upper()).fit()
             theta0 = np.array([-np.log(rdg.clf.lambda_), 1./rdg.clf.alpha_, 1.0])
             print theta0
             obj = fitfcns[fit](X0, Y0, X1, Y1, Ds=D, label=fit.upper()).fit(theta0=theta0).score()
+            asdreg = obj.clf.Reg_
+        elif fit == 'asdrd':
+            # assert asdreg is not None
+            # assert theta0 is not None
+            obj = fitfcns[fit](X0, Y0, X1, Y1, Ds=D, asdreg=asdreg, label=fit.upper()).fit(theta0=theta0).score()
         else:
             obj = fitfcns[fit](X0, Y0, X1, Y1, label=fit.upper()).fit().score()
         wfs[fit] = obj.clf.coef_
