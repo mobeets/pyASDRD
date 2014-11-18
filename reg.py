@@ -3,7 +3,7 @@ import sklearn.cross_validation
 import sklearn.linear_model
 
 class Fit(object):
-    def __init__(self, X0, Y0, X1=None, Y1=None, label=None):
+    def __init__(self, X0, Y0, X1=None, Y1=None, label=None, fit_intercept=False, normalize=False):
         """
         X0, Y0 is training data
         X1, Y1 is testing data (defaults to training data if not supplied)
@@ -13,6 +13,8 @@ class Fit(object):
         self.Y0 = Y0
         self.Y1 = Y1 if Y1 is not None else Y0
         self.label = label if label is not None else ''
+        self.fit_intercept = fit_intercept
+        self.normalize = normalize
         self.clf = self.init_clf()
         # return self
 
@@ -56,7 +58,7 @@ class Fit(object):
 
 class OLS(Fit):
     def init_clf(self):
-        return sklearn.linear_model.LinearRegression(fit_intercept=False, normalize=False)
+        return sklearn.linear_model.LinearRegression(fit_intercept=self.fit_intercept, normalize=self.normalize)
 
 class Ridge(Fit):
     """
@@ -64,7 +66,7 @@ class Ridge(Fit):
     """
     def init_clf(self):
         # (clf.alpha_, clf.lambda_)
-        return sklearn.linear_model.BayesianRidge(fit_intercept=False)
+        return sklearn.linear_model.BayesianRidge(fit_intercept=self.fit_intercept)
 
 class Lasso(Fit):
     """
@@ -72,12 +74,12 @@ class Lasso(Fit):
     """
     def init_clf(self):
         # clf.alpha_
-        return sklearn.linear_model.LassoCV(fit_intercept=False, normalize=False)
+        return sklearn.linear_model.LassoCV(fit_intercept=self.fit_intercept, normalize=self.normalize)
 
 class ARD(Fit):
     def init_clf(self):
         # (clf.alpha_, clf.lambda_)
-        return sklearn.linear_model.ARDRegression(fit_intercept=False, normalize=False)
+        return sklearn.linear_model.ARDRegression(fit_intercept=self.fit_intercept, normalize=self.normalize)
 
 class Bilinear(Fit):
     def init_clf(self):
