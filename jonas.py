@@ -41,7 +41,9 @@ def load(infile, keep_ones=True):
     elif fmt == '.npy':
         xs = np.load(infile)
     end_ind = -1 if keep_ones else -2
-    return xs[:,:end_ind][:,::-1], xs[:,-1]
+    X = xs[:,:end_ind][:,::-1] # all but last columns; reverse columns
+    Y = xs[:,-1] # last column
+    return X, Y
 
 def plot_lags(X, Y, lag=False, autocorr=False):
     X = X[:1000,:]
@@ -89,7 +91,7 @@ def split(X, Y, N, M, skipM=5, front=True):
     return X, Y
 
 fitfcns = {'ols': reg.OLS, 'ridge': reg.Ridge, 'ard': reg.ARD, 'asd': asdard.ASD, 'asdrd': asdard.ASDRD, 'lasso': reg.Lasso}
-def main(infile, fits, p=0.8, N=200, M=50, skipM=0, thresh=None, doPlot=False, label=None, flip=False, color=None):
+def main(infile, fits, p=0.8, N=200, M=50, skipM=0, thresh=None, doPlot=False, label=None, flip=False, color=None, fitIntercept=False):
     """
     to initialize for ASD:
         * ssq = ridge.clf.alpha
@@ -103,9 +105,6 @@ def main(infile, fits, p=0.8, N=200, M=50, skipM=0, thresh=None, doPlot=False, l
         X = X[inds,:]
         Y = Y[inds]
         print X.shape
-    # plot_lags(X, Y)
-    # return
-    # 1/0
 
     if p > 0.0:
         N = int(p*X.shape[0])
@@ -126,19 +125,19 @@ def main(infile, fits, p=0.8, N=200, M=50, skipM=0, thresh=None, doPlot=False, l
     asdreg = None
     theta0 = None
     for fit in sorted(fits):
+        lbl = fit.upper()
         print 'Fitting {0}'.format(fit.upper())
         if fit == 'asd':
-            rdg = fitfcns['ridge'](X0, Y0, X1, Y1, label=fit.upper()).fit()
+            rdg = fitfcns['ridge'](X0, Y0, X1, Y1, label=lbl, fit_intercept=fitIntercept).fit()
             theta0 = np.array([-np.log(rdg.clf.lambda_), 1./rdg.clf.alpha_, 1.0])
             print theta0
-            obj = fitfcns[fit](X0, Y0, X1, Y1, Ds=D, label=fit.upper()).fit(theta0=theta0).score()
+            obj = fitfcns[fit](X0, Y0, X1, Y1, Ds=D, label=lbl).fit(theta0=theta0, fit_intercept=fitIntercept).score()
             asdreg = obj.clf.Reg_
         elif fit == 'asdrd':
-            # assert asdreg is not None
-            # assert theta0 is not None
-            obj = fitfcns[fit](X0, Y0, X1, Y1, Ds=D, asdreg=asdreg, label=fit.upper()).fit(theta0=theta0).score()
+            obj = fitfcns[fit](X0, Y0, X1, Y1, Ds=D, asdreg=asdreg, label=lbl).fit(theta0=theta0, fit_intercept=fitIntercept).score()
         else:
-            obj = fitfcns[fit](X0, Y0, X1, Y1, label=fit.upper()).fit().score()
+            obj = fitfcns[fit](X0, Y0, X1, Y1, label=lbl, fit_intercept=fitIntercept).fit().score()
+        print obj.clf.intercept_
         wfs[fit] = obj.clf.coef_
 
     if doPlot:
@@ -159,6 +158,7 @@ if __name__ == '__main__':
     parser.add_argument('-j', "--infile2", type=str, default=None)
     parser.add_argument("--convert", action='store_true', default=False)
     parser.add_argument("--plot", action='store_true', default=False)
+    parser.add_argument("--intercept", action='store_true', default=False, help="Fit intercept")
     parser.add_argument("--fmt", type=str, choices=['h5', 'npy'], default=None)
     parser.add_argument("--fits", default=ALL_FITS, nargs='*', choices=ALL_FITS, type=str, help="The fitting methods you would like to use, from: {0}".format(ALL_FITS))
     parser.add_argument("-m", type=int, default=50, help="# of frame lags to use")
@@ -171,11 +171,7 @@ if __name__ == '__main__':
         write(args.infile, args.fmt)
     else:
         cmap = matplotlib.cm.get_cmap('Reds')
-        main(args.infile, args.fits, args.p, args.n, args.m, args.skipm, args.thresh, args.plot)
-        if args.infile2:
-            cmap = matplotlib.cm.get_cmap('Blues')
-            main(args.infile2, args.fits, args.p, args.n, args.m, args.skipm, args.thresh, args.plot, 'startY', color=cmap(0.7))
-
+        main(args.infile, args.fits, args.p, args.n, args.m, args.skipm, args.thresh, args.plot, fitIntercept=args.intercept)
         if args.plot:
             plt.plot(plt.xlim(), [0, 0], '--', color='gray')
             plt.xlabel('foe lag')
