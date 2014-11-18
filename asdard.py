@@ -178,7 +178,7 @@ def ASD_FP(X, Y, Ds, theta0=None, maxiters=10000, step=0.01, tol=1e-5):
     """
     if theta0 is None:
         theta0 = (-1.0, 0.1) + (2.0,)*len(Ds)
-    theta_bounds = [(-20.0, 20.0), (None, None)] + [(10e-6, 10e6)]*len(Ds)
+    theta_bounds = [(-20.0, 20.0), (None, None)] + [(10e-6, 10e3)]*len(Ds)
     # theta_bounds = [(-20.0, 20.0), (None, None)] + [(0.5, 10e6)]*len(Ds)
 
     p, q = X.shape
