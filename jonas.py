@@ -131,10 +131,10 @@ def main(infile, fits, p=0.8, N=200, M=50, skipM=0, thresh=None, doPlot=False, l
             rdg = fitfcns['ridge'](X0, Y0, X1, Y1, label=lbl, fit_intercept=fitIntercept).fit()
             theta0 = np.array([-np.log(rdg.clf.lambda_), 1./rdg.clf.alpha_, 1.0])
             print theta0
-            obj = fitfcns[fit](X0, Y0, X1, Y1, Ds=D, label=lbl).fit(theta0=theta0, fit_intercept=fitIntercept).score()
+            obj = fitfcns[fit](X0, Y0, X1, Y1, Ds=D, label=lbl, fit_intercept=fitIntercept).fit(theta0=theta0).score()
             asdreg = obj.clf.Reg_
         elif fit == 'asdrd':
-            obj = fitfcns[fit](X0, Y0, X1, Y1, Ds=D, asdreg=asdreg, label=lbl).fit(theta0=theta0, fit_intercept=fitIntercept).score()
+            obj = fitfcns[fit](X0, Y0, X1, Y1, Ds=D, asdreg=asdreg, label=lbl, fit_intercept=fitIntercept).fit(theta0=theta0).score()
         else:
             obj = fitfcns[fit](X0, Y0, X1, Y1, label=lbl, fit_intercept=fitIntercept).fit().score()
         print obj.clf.intercept_
@@ -155,7 +155,6 @@ if __name__ == '__main__':
     ALL_FITS = fitfcns.keys()
     parser = argparse.ArgumentParser()
     parser.add_argument('-i', "--infile", type=str, default=None)
-    parser.add_argument('-j', "--infile2", type=str, default=None)
     parser.add_argument("--convert", action='store_true', default=False)
     parser.add_argument("--plot", action='store_true', default=False)
     parser.add_argument("--intercept", action='store_true', default=False, help="Fit intercept")
