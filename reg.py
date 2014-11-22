@@ -1,6 +1,9 @@
 import numpy as np
 import sklearn.cross_validation
 import sklearn.linear_model
+from asdard import ASDRD_inner, ASD_FP
+from asd_og import ASD_OG
+from asd_og_og import ASD_OG_OG
 
 class Fit(object):
     def __init__(self, X0, Y0, X1=None, Y1=None, label=None, fit_intercept=False, normalize=False):
@@ -104,6 +107,96 @@ class BilinearClf(object):
         # resid = lambda a, b: ((a-b)**2).sum()
         # return 1 - resid(Y1, self.predict(X1))/resid(Y1, Y1.mean())
 
+class ASD(Fit):
+    def __init__(self, *args, **kwargs):
+        self.Ds = kwargs.pop('Ds')
+        self.Dt = kwargs.pop('Dt', None)
+        super(ASD, self).__init__(*args, **kwargs)
+
+    def init_clf(self):
+        # (clf.coef_, clf.hyper_, clf.Reg_)
+        return ASDClf(self.Ds, self.Dt, fit_intercept=self.fit_intercept)
+
+class ASDClf(object):
+    def __init__(self, Ds, Dt=None, fit_intercept=False):
+        self.Ds = Ds
+        self.Dt = Dt
+        self.D = [self.Ds] if Dt is None else [self.Ds, self.Dt]
+        self.fit_intercept = fit_intercept
+
+    def center_data(self, X, Y):
+        """
+        source: https://github.com/scikit-learn/scikit-learn/blob/master/sklearn/linear_model/base.py
+        """
+        if self.fit_intercept:
+            X_mean = np.average(X, axis=0)
+            Y_mean = np.average(Y, axis=0)
+            X -= X_mean
+            Y -= Y_mean
+        else:
+            X_mean = np.zeros(X.shape[1])
+            Y_mean = 0. if Y.ndim == 1 else np.zeros(Y.shape[1], dtype=X.dtype)
+        return X, Y, X_mean, Y_mean
+
+    def set_intercept(self, X_mean, Y_mean):
+        if self.fit_intercept:
+            self.intercept_ = Y_mean - np.dot(X_mean, self.coef_.T)
+        else:
+            self.intercept_ = 0.
+
+    def fit(self, X, Y, theta0=None, maxiters=1000, step=0.01, tol=1e-5, useFP=True):
+        X, Y, X_mean, Y_mean = self.center_data(X, Y)
+        if useFP == True:
+            print 'FP'
+            self.coef_, self.Reg_, self.hyper_ = ASD_FP(X, Y, self.D,
+                theta0=theta0, maxiters=maxiters, step=step, tol=tol)
+        elif useFP == 'OG_OG':
+            print 'OG_OG'
+            self.coef_, self.Reg_, self.hyper_ = ASD_OG_OG(np.matrix(X), np.matrix(Y).T, np.matrix(self.Ds),
+                theta0=theta0, maxiters=maxiters, step=step, tol=tol)
+        else:
+            self.coef_, self.Reg_, self.hyper_ = ASD_OG(X, Y, self.D, theta0=theta0)
+        self.set_intercept(X_mean, Y_mean)
+
+    def manual_fit(self, X, Y, coef, Reg, hyper):
+        X, Y, X_mean, Y_mean = self.center_data(X, Y)
+        self.coef_, self.Reg_, self.hyper_ = coef, Reg, hyper
+        self.set_intercept(X_mean, Y_mean)
+
+    def predict(self, X1):
+        return X1.dot(self.coef_) + self.intercept_
+
+    def score(self, X1, Y1):
+        return sklearn.metrics.r2_score(Y1, self.predict(X1))
+
+class ASDRD(ASD):
+    def __init__(self, *args, **kwargs):
+        self.asdreg = kwargs.pop('asdreg', None)
+        super(ASDRD, self).__init__(*args, **kwargs)
+
+    def init_clf(self):
+        return ASDRDClf(self.Ds, self.Dt, self.asdreg, fit_intercept=self.fit_intercept)
+
+class ASDRDClf(ASDClf):
+    def __init__(self, Ds, Dt=None, asdreg=None, fit_intercept=False):
+        self.Ds = Ds
+        self.Dt = Dt
+        self.D = [self.Ds] if Dt is None else [self.Ds, self.Dt]
+        self.asdreg = asdreg
+        self.fit_intercept = fit_intercept
+
+    def fit(self, X, Y, theta0=None, maxiters=10000, step=0.01, tol=1e-6, useFP=True):
+        X, Y, X_mean, Y_mean = self.center_data(X, Y)
+        if self.asdreg is None:
+            if useFP:
+                self.asd_coef_, self.asdreg, self.asd_hyper_ = ASD_FP(X, Y, self.D,
+                    theta0=theta0, maxiters=maxiters, step=step, tol=tol)
+            else:
+                self.asd_coef_, self.asdreg, self.asd_hyper_ = ASD_OG(X, Y, self.D, theta0=theta0)
+            print "ASD complete"
+        self.coef_, self.invReg_ = ASDRD_inner(X, Y, self.asdreg, ARD)
+        self.set_intercept(X_mean, Y_mean)
+
 def trainAndTest(X, Y, trainPct=0.9):
     """
     returns (X,Y) split into training and testing sets
@@ -125,7 +218,7 @@ def kFold(X, Y, K=10, shuffle=False):
     for train_index, test_index in kf:
         X0, X1 = X[train_index], X[test_index]
         Y0, Y1 = Y[train_index], Y[test_index]
-        yield (X0, Y0), (X1, Y1)
+        yield X0, Y0, X1, Y1
 
 if __name__ == '__main__':
     X = np.arange(10,50)
