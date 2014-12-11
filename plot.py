@@ -54,9 +54,9 @@ def plotFullInner(xy, ws, vmax=None, sz=0.5*1e2):
     plt.scatter(xy[:,0], xy[:,1], s=sz, c=cs, lw=0)
     # pad
     tm = xy[xy[:,0] == xy[0,0], 1]
-    dist = np.abs(tm.mean() - tm.min())/2.
-    plt.xlim(xy[:,0].min() - dist, xy[:,0].max() + dist)
-    plt.ylim(xy[:,1].min() - dist, xy[:,1].max() + dist)
+    dist = np.abs(tm.mean() - tm.min())
+    # plt.xlim(xy[:,0].min() - dist, xy[:,0].max() + dist)
+    # plt.ylim(xy[:,1].min() - dist, xy[:,1].max() + dist)
     # format axes
     plt.gca().set_aspect('equal')
     plt.gca().get_xaxis().set_visible(False)

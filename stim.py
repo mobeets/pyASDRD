@@ -1,13 +1,11 @@
 import numpy as np
 import scipy.spatial.distance
 
-class Stim:
-    def __init__(self, n, nt, ns, xy=None):
-        self.n = n
-        self.nt = nt
-        self.ns = ns
-        self.X = self.stim(self.n, self.nt, self.ns)
-        self.xy = griddedPoints(self.ns) if xy is None else xy
+class Stim(object):
+    def __init__(self, X, xy):
+        self.n, self.nt, self.ns = X.shape
+        self.X = X
+        self.xy = xy
         self.D = sqdist(self.xy)
         self.Xf, self.Xs, self.Xt, self.Xm = self.marginals(self.X, self.n, self.nt, self.ns)
 
@@ -29,6 +27,12 @@ class Stim:
             row = np.hstack([np.zeros([1, ns-abs(val)]), np.ones([1, abs(val)])])
             X[i, j, :] = (2*(val>0) - 1)*row.T[np.random.permutation(ns)].T
         return X
+
+class RandStim(Stim):
+    def __init__(self, n, nt, ns, xy=None):
+        self.X = self.stim(n, nt, ns)
+        self.xy = griddedPoints(ns) if xy is None else xy
+        super(RandStim, self).__init__(self.X, self.xy)
 
 def randomPoints(nw, b=5, n=100):
     xi = np.linspace(-b, b, n)

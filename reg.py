@@ -2,8 +2,6 @@ import numpy as np
 import sklearn.cross_validation
 import sklearn.linear_model
 from asdard import ASDRD_inner, ASD_FP
-from asd_og import ASD_OG
-from asd_og_og import ASD_OG_OG
 
 class Fit(object):
     def __init__(self, X0, Y0, X1=None, Y1=None, label=None, fit_intercept=False, normalize=False):
@@ -144,18 +142,9 @@ class ASDClf(object):
         else:
             self.intercept_ = 0.
 
-    def fit(self, X, Y, theta0=None, maxiters=1000, step=0.01, tol=1e-5, useFP=True):
+    def fit(self, X, Y, theta0=None, maxiters=1000, step=0.01, tol=1e-5):
         X, Y, X_mean, Y_mean = self.center_data(X, Y)
-        if useFP == True:
-            print 'FP'
-            self.coef_, self.Reg_, self.hyper_ = ASD_FP(X, Y, self.D,
-                theta0=theta0, maxiters=maxiters, step=step, tol=tol)
-        elif useFP == 'OG_OG':
-            print 'OG_OG'
-            self.coef_, self.Reg_, self.hyper_ = ASD_OG_OG(np.matrix(X), np.matrix(Y).T, np.matrix(self.Ds),
-                theta0=theta0, maxiters=maxiters, step=step, tol=tol)
-        else:
-            self.coef_, self.Reg_, self.hyper_ = ASD_OG(X, Y, self.D, theta0=theta0)
+        self.coef_, self.Reg_, self.hyper_ = ASD_FP(X, Y, self.D, theta0=theta0)
         self.set_intercept(X_mean, Y_mean)
 
     def manual_fit(self, X, Y, coef, Reg, hyper):
@@ -185,14 +174,10 @@ class ASDRDClf(ASDClf):
         self.asdreg = asdreg
         self.fit_intercept = fit_intercept
 
-    def fit(self, X, Y, theta0=None, maxiters=10000, step=0.01, tol=1e-6, useFP=True):
+    def fit(self, X, Y, theta0=None, maxiters=10000, step=0.01, tol=1e-6):
         X, Y, X_mean, Y_mean = self.center_data(X, Y)
         if self.asdreg is None:
-            if useFP:
-                self.asd_coef_, self.asdreg, self.asd_hyper_ = ASD_FP(X, Y, self.D,
-                    theta0=theta0, maxiters=maxiters, step=step, tol=tol)
-            else:
-                self.asd_coef_, self.asdreg, self.asd_hyper_ = ASD_OG(X, Y, self.D, theta0=theta0)
+            self.asd_coef_, self.asdreg, self.asd_hyper_ = ASD_FP(X, Y, self.D, theta0=theta0)
             print "ASD complete"
         self.coef_, self.invReg_ = ASDRD_inner(X, Y, self.asdreg, ARD)
         self.set_intercept(X_mean, Y_mean)
