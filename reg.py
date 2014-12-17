@@ -2,7 +2,8 @@ import numpy as np
 import sklearn.cross_validation
 import sklearn.linear_model
 from asdrd import ASDRD_inner
-from asd import ASD_inner
+import asd
+# from asd import ASD_inner
 
 class Fit(object):
     def __init__(self, X0, Y0, X1=None, Y1=None, label=None, fit_intercept=False, normalize=False):
@@ -110,6 +111,8 @@ class ASD(Fit):
     def __init__(self, *args, **kwargs):
         self.Ds = kwargs.pop('Ds')
         self.Dt = kwargs.pop('Dt', None)
+        # print type(ASD)
+        # print type(self)
         super(ASD, self).__init__(*args, **kwargs)
 
     def init_clf(self):
@@ -125,13 +128,14 @@ class ASDClf(object):
 
     def center_data(self, X, Y):
         """
+        if an intercept will be fit, normalize X and Y by subtracting off their means
         source: https://github.com/scikit-learn/scikit-learn/blob/master/sklearn/linear_model/base.py
         """
         if self.fit_intercept:
-            X_mean = np.average(X, axis=0)
-            Y_mean = np.average(Y, axis=0)
-            X -= X_mean
-            Y -= Y_mean
+            X_mean = np.mean(X, axis=0)
+            Y_mean = np.mean(Y, axis=0)
+            X = X - X_mean
+            Y = Y - Y_mean
         else:
             X_mean = np.zeros(X.shape[1])
             Y_mean = 0. if Y.ndim == 1 else np.zeros(Y.shape[1], dtype=X.dtype)
@@ -145,7 +149,7 @@ class ASDClf(object):
 
     def fit(self, X, Y, theta0=None, maxiters=1000, step=0.01, tol=1e-5):
         X, Y, X_mean, Y_mean = self.center_data(X, Y)
-        self.coef_, self.Reg_, self.hyper_ = ASD_inner(X, Y, self.D, theta0=theta0)
+        self.coef_, self.Reg_, self.hyper_ = asd.ASD_inner(X, Y, self.D, theta0=theta0)
         self.set_intercept(X_mean, Y_mean)
 
     def manual_fit(self, X, Y, coef, Reg, hyper):

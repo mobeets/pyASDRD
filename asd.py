@@ -23,7 +23,7 @@ def ASDLogEviSVD(X, Y, YY, Reg, ssq, tol=1e-8):
     """
     U, s, _ = np.linalg.svd(Reg)
     inds = s/s[0] > tol
-    print 'SVD: using {0} cols of rank-{1} prior covariance matrix'.format(inds.sum(), len(inds))
+    # print 'SVD: using {0} cols of rank-{1} prior covariance matrix'.format(inds.sum(), len(inds))
     RegInv = np.diag(1/s[inds])
     B = U[:,inds]
     XB = X.dot(B)
@@ -107,7 +107,7 @@ def scores(X0, Y0, X1, Y1, D, (ro, ssq, delta)):
     ll = loglikelihood(X1, Y1, D, (ro, ssq, delta))
     return evi, -ll
 
-def ASD_inner(X, Y, Ds, theta0=None, jac=False, isLog=True, method='TNC'): # 'TNC' 'CG', 'SLSQP', 'L-BFGS-B'
+def ASD_inner(X, Y, Ds, theta0=None, verbose=False, jac=False, isLog=True, method='TNC'): # 'TNC' 'CG', 'SLSQP', 'L-BFGS-B'
     """
     X - (p x q) matrix with inputs in rows
     Y - (p, 1) matrix with measurements
@@ -130,7 +130,7 @@ def ASD_inner(X, Y, Ds, theta0=None, jac=False, isLog=True, method='TNC'): # 'TN
     XY = X.T.dot(Y)
     XX = X.T.dot(X)
 
-    def objfcn(hyper, jac=jac, verbose=True):
+    def objfcn(hyper, jac=jac, verbose=verbose):
         if isLog:
             hyper = np.exp(hyper)
         if verbose:
@@ -153,7 +153,7 @@ def ASD_inner(X, Y, Ds, theta0=None, jac=False, isLog=True, method='TNC'): # 'TN
             print -np.array(der_logevi)
         return -logevi, -np.array(der_logevi)
 
-    options = {'disp': 5}
+    options = {'maxiter': int(1e8)}
     theta = scipy.optimize.minimize(objfcn, theta0, bounds=bounds, method=method, jac=jac, options=options)
     if not theta['success']:
         print theta

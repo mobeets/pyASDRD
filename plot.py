@@ -47,29 +47,31 @@ def XY(S, R):
     plt.tight_layout()
     plt.show()
 
-def plotFullInner(xy, ws, vmax=None, sz=0.5*1e2):
-    vmax = ws.max() if vmax is None else vmax
-    ws = ws/vmax if vmax > 0.0 else np.array([0.0]*len(ws))
-    cs = [str(min(w, 1.0)) for w in 1.0-ws] # [(w, w, w) for w in ws]
-    plt.scatter(xy[:,0], xy[:,1], s=sz, c=cs, lw=0)
-    # pad
-    tm = xy[xy[:,0] == xy[0,0], 1]
-    dist = np.abs(tm.mean() - tm.min())
-    # plt.xlim(xy[:,0].min() - dist, xy[:,0].max() + dist)
-    # plt.ylim(xy[:,1].min() - dist, xy[:,1].max() + dist)
-    # format axes
-    plt.gca().set_aspect('equal')
-    plt.gca().get_xaxis().set_visible(False)
-    plt.gca().tick_params(axis='y', labelleft=False, left=False, right=False)
-    for spine in plt.gca().spines.values():
+def color_lkp(clrMid=None, clrNeg=None, clrPos=None):
+    clrMid = np.array([0.95, 0.95, 0.95]) if clrMid is None else clrMid # middle color
+    clrNeg = np.array([0.9, 0.3, 0.3]) if clrNeg is None else clrNeg # negative color
+    clrPos = np.array([0.3, 0.3, 0.9]) if clrPos is None else clrPos # positive color
+    clrf = lambda i, c0, c1: c0 + (i*1.0)*(c1-c0)
+    clr = lambda i: clrf(i, clrMid, clrPos) if i >= 0.0 else clrf(-i, clrMid, clrNeg)
+    return lambda xs: np.array([clr(x) for x in xs])
+
+def plotFullFormat(ax=None):
+    ax = plt.gca() if ax is None else ax
+    ax.set_aspect('equal')
+    ax.get_xaxis().set_visible(False)
+    ax.tick_params(axis='y', labelleft=False, left=False, right=False)
+    for spine in ax.spines.values():
         spine.set_edgecolor('0.8')
 
-def plotFull(xy, wf, vmax=None):
-    vmax = wf.max() if vmax is None else vmax
+def plotFull(xy, wf, vmax=None, sz=2e2):
     nt = wf.shape[0]
-    plt.figure(figsize=(8,2), facecolor="white")
+    vmax = abs(wf).max() if vmax is None else vmax
+    plt.figure(figsize=(16,4), facecolor='white')
+    clrlkp = color_lkp()
     for i in xrange(nt):
-        plt.subplot(1, nt, i+1)
-        plotFullInner(xy, wf[i,:], vmax=vmax)
+        ax = plt.subplot(1, nt, i+1)
+        # plotFullInnerNorm(xy, wf[i,:], vmax=vmax, clrlkp=clrlkp, ax=ax)
+        plt.scatter(xy[:,0], xy[:,1], c=clrlkp(wf[i,:]/vmax), s=sz, lw=0)
+        plotFullFormat(ax)
         plt.title('t={0}'.format(i))#, rotation='horizontal', horizontalalignment='right')
     plt.show()
